@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestor GTD × Eisenhower</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --panel-2:#fafbfc; --border:#e2e5ea; --text:#1f2430; --text-dim:#6b7280;
+    --accent:#4f46e5; --accent-2:#6366f1; --accent-soft:#eef0ff;
+    --q1:#ef4444; --q1-bg:#fee2e2; --q2:#3b82f6; --q2-bg:#dbeafe; --q3:#f59e0b; --q3-bg:#fef3c7; --q4:#9ca3af; --q4-bg:#f1f2f4;
+    --overdue:#dc2626; --overdue-bg:#fee2e2; --today:#ea580c; --today-bg:#ffedd5; --soon:#ca8a04; --soon-bg:#fef9c3;
+    --radius:10px; --shadow:0 1px 3px rgba(20,20,40,.08), 0 1px 2px rgba(20,20,40,.06);
+    color-scheme: light;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;font-size:13px;}
+
+  /* ---------- Header ---------- */
+  header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;}
+  .brand{font-weight:700;font-size:16px;color:var(--accent);white-space:nowrap;margin-right:4px;}
+  .capture-form{display:flex;gap:6px;flex:1;min-width:260px;}
+  .capture-form input{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2);}
+  .capture-form input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent);}
+  .btn{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:13px;font-weight:600;white-space:nowrap;}
+  .btn:hover{background:var(--panel-2);}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn-primary:hover{background:var(--accent-2);}
+  .btn-sm{padding:4px 9px;font-size:12px;border-radius:6px;}
+  .btn-icon{padding:6px 8px;border-radius:6px;line-height:1;}
+  .btn-danger{color:var(--overdue);}
+  nav.tabs{display:flex;gap:4px;background:var(--panel-2);padding:3px;border-radius:9px;}
+  nav.tabs button{padding:7px 13px;border:none;background:transparent;border-radius:7px;font-weight:600;color:var(--text-dim);font-size:13px;}
+  nav.tabs button.active{background:var(--panel);color:var(--accent);box-shadow:var(--shadow);}
+  .header-actions{display:flex;gap:6px;align-items:center;}
+  #save-indicator{font-size:11px;color:var(--text-dim);min-width:70px;}
+  .inbox-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;background:var(--q1);color:#fff;border-radius:20px;font-size:10px;font-weight:700;margin-left:4px;}
+
+  main{padding:18px;max-width:1500px;margin:0 auto;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  h2.view-title{margin:0 0 14px;font-size:18px;}
+  .empty-state{padding:40px 20px;text-align:center;color:var(--text-dim);background:var(--panel);border:1px dashed var(--border);border-radius:var(--radius);}
+
+  /* ---------- Cards ---------- */
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:10px 12px;margin-bottom:8px;cursor:grab;}
+  .card:active{cursor:grabbing;}
+  .card.dragging{opacity:.4;}
+  .card-top{display:flex;align-items:flex-start;gap:8px;}
+  .card-title{font-weight:600;flex:1;font-size:13.5px;line-height:1.3;}
+  .card-title.done{text-decoration:line-through;color:var(--text-dim);}
+  .chk{flex-shrink:0;width:17px;height:17px;margin-top:1px;cursor:pointer;accent-color:var(--accent);}
+  .card-notes{font-size:12px;color:var(--text-dim);margin-top:4px;white-space:pre-wrap;}
+  .card-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center;}
+  .tag{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;}
+  .tag-cat{color:#fff;}
+  .tag-quad{border:1px solid transparent;}
+  .tag-deadline{border:1px solid transparent;}
+  .tag-overdue{color:var(--overdue);background:var(--overdue-bg);}
+  .tag-today{color:var(--today);background:var(--today-bg);}
+  .tag-soon{color:var(--soon);background:var(--soon-bg);}
+  .tag-normal{color:var(--text-dim);background:var(--q4-bg);}
+  .tag-parent{color:var(--accent);background:var(--accent-soft);}
+  .card-actions{display:flex;gap:4px;margin-left:auto;}
+  .card-actions button{background:none;border:none;color:var(--text-dim);padding:2px 4px;font-size:13px;border-radius:4px;}
+  .card-actions button:hover{background:var(--panel-2);color:var(--text);}
+  .progress-wrap{margin-top:7px;background:var(--q4-bg);border-radius:20px;height:6px;overflow:hidden;}
+  .progress-bar{height:100%;background:var(--accent);border-radius:20px;transition:width .2s;}
+  .progress-label{font-size:11px;color:var(--text-dim);margin-top:3px;}
+
+  /* ---------- Inbox ---------- */
+  .inbox-list{max-width:720px;}
+  .inbox-item{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 14px;margin-bottom:10px;}
+  .inbox-item-row{display:flex;align-items:center;gap:10px;}
+  .inbox-item-title{flex:1;font-weight:600;font-size:14px;}
+  .inbox-item-date{font-size:11px;color:var(--text-dim);}
+
+  /* ---------- Weekly planner ---------- */
+  .week-grid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:10px;overflow-x:auto;}
+  .day-col{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius);padding:8px;min-height:200px;display:flex;flex-direction:column;}
+  .day-col.dragover{outline:2px dashed var(--accent);outline-offset:-2px;}
+  .day-col-header{font-weight:700;font-size:12.5px;padding:4px 4px 8px;display:flex;justify-content:space-between;color:var(--text-dim);text-transform:uppercase;letter-spacing:.03em;}
+  .day-col-header .count{background:var(--panel);border-radius:20px;padding:0 6px;font-size:11px;}
+  .day-col.today .day-col-header{color:var(--accent);}
+  .day-body{flex:1;min-height:60px;}
+  .unassigned-row{margin-top:16px;}
+
+  /* ---------- Board ---------- */
+  .board-layout{display:flex;gap:16px;align-items:flex-start;}
+  .project-sidebar{width:270px;flex-shrink:0;}
+  .project-sidebar .card{cursor:pointer;}
+  .project-sidebar .card.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);}
+  .kanban{flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;min-width:0;}
+  .kanban-col{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px;min-height:220px;}
+  .kanban-col.dragover{outline:2px dashed var(--accent);outline-offset:-2px;}
+  .kanban-col-header{font-weight:700;font-size:12.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px;display:flex;justify-content:space-between;}
+  .add-inline{display:flex;gap:6px;margin-top:6px;}
+  .add-inline input{flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:6px;}
+
+  /* ---------- Timers ---------- */
+  .timers-layout{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;}
+  @media (max-width:980px){.timers-layout{grid-template-columns:1fr;}}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:16px;}
+  .panel h3{margin:0 0 12px;font-size:14px;}
+  .field{margin-bottom:10px;}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:4px;}
+  .field select,.field input[type=text],.field input[type=date],.field input[type=number],.field textarea{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--panel-2);}
+  .field textarea{resize:vertical;min-height:50px;}
+  .timer-display{font-size:44px;font-weight:700;text-align:center;padding:14px 0;font-variant-numeric:tabular-nums;}
+  .timer-phase{text-align:center;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px;}
+  .timer-controls{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .pomo-count{text-align:center;font-size:12px;color:var(--text-dim);margin-top:8px;}
+  .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  table.summary{width:100%;border-collapse:collapse;font-size:13px;}
+  table.summary th,table.summary td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--border);}
+  table.summary th{color:var(--text-dim);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;}
+  table.summary tr:last-child td{font-weight:700;border-bottom:none;}
+  .cat-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;}
+  .active-timer-banner{background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;font-size:12.5px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{position:fixed;inset:0;background:rgba(20,20,30,.45);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;z-index:100;}
+  .modal{background:var(--panel);border-radius:12px;max-width:560px;width:100%;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+  .modal h3{margin:0 0 14px;font-size:16px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .toggle-group{display:flex;gap:8px;}
+  .toggle-btn{flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2);font-weight:600;font-size:12.5px;text-align:center;}
+  .toggle-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);}
+  .quad-preview{margin-top:8px;padding:8px 10px;border-radius:8px;font-size:12.5px;font-weight:700;text-align:center;}
+  .type-switch{display:flex;gap:8px;margin-bottom:12px;}
+  .type-switch button{flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2);font-weight:700;font-size:13px;}
+  .type-switch button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .cat-manage-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);}
+  .cat-manage-row input[type=text]{flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:6px;}
+  .cat-color-swatch{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);padding:0;}
+  .hint{font-size:11.5px;color:var(--text-dim);margin-top:4px;}
+
+  ::-webkit-scrollbar{height:8px;width:8px;}
+  ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:8px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">GTD × Eisenhower</div>
+  <form class="capture-form" id="capture-form">
+    <input type="text" id="capture-input" placeholder="Captura rápida: escribe cualquier tarea y pulsa Enter…" autocomplete="off">
+    <button type="submit" class="btn btn-primary">Capturar</button>
+  </form>
+  <nav class="tabs" id="tabs">
+    <button data-tab="inbox">Inbox<span class="inbox-badge" id="inbox-count" style="display:none"></span></button>
+    <button data-tab="week">Planificación semanal</button>
+    <button data-tab="board">Proyectos</button>
+    <button data-tab="timers">Timers</button>
+  </nav>
+  <div class="header-actions">
+    <span id="save-indicator"></span>
+    <button class="btn btn-sm" id="btn-categories" title="Gestionar categorías">Categorías</button>
+    <button class="btn btn-sm" id="btn-export" title="Exportar datos a JSON">Exportar</button>
+    <button class="btn btn-sm" id="btn-import" title="Importar datos desde JSON">Importar</button>
+    <input type="file" id="file-import" accept="application/json" style="display:none">
+  </div>
+</header>
+
+<main>
+  <section class="view" id="view-inbox">
+    <h2 class="view-title">Inbox — captura sin procesar</h2>
+    <div class="inbox-list" id="inbox-list"></div>
+  </section>
+
+  <section class="view" id="view-week">
+    <h2 class="view-title">Planificación semanal</h2>
+    <div class="week-grid" id="week-grid"></div>
+  </section>
+
+  <section class="view" id="view-board">
+    <h2 class="view-title">Board de proyectos</h2>
+    <div class="board-layout">
+      <div class="project-sidebar">
+        <button class="btn btn-primary" id="btn-new-project" style="width:100%;margin-bottom:10px;">+ Nuevo proyecto</button>
+        <div id="project-list"></div>
+      </div>
+      <div class="kanban" id="kanban-area"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-timers">
+    <h2 class="view-title">Timers</h2>
+    <div class="timers-layout">
+      <div>
+        <div class="panel" id="timer-panel"></div>
+      </div>
+      <div>
+        <div class="panel" id="pomo-settings-panel"></div>
+        <div class="panel" id="summary-panel"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="modal-root"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ===================== STATE ===================== */
+const STORAGE_KEY = "gtd_eisenhower_state_v1";
+const DAY_NAMES = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+const DAY_SHORT = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+
+let state = loadState();
+
+function defaultState(){
+  return {
+    categories: [
+      {id:"personal", name:"Personal", color:"#14b8a6"},
+      {id:"laboral", name:"Laboral", color:"#6366f1"}
+    ],
+    tasks: [],
+    timeLog: [],
+    pomodoroSettings: {work:25, shortBreak:5, longBreak:15, cycles:4},
+    activeTimer: null,
+    activeTab: "inbox",
+    selectedProjectId: null
+  };
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    const d = defaultState();
+    return Object.assign(d, parsed);
+  }catch(e){
+    console.warn("No se pudo cargar el estado guardado, se usa uno nuevo.", e);
+    return defaultState();
+  }
+}
+
+let saveTimeout = null;
+function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const el = document.getElementById("save-indicator");
+    el.textContent = "Guardado " + new Date().toLocaleTimeString("es-ES",{hour:'2-digit',minute:'2-digit'});
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(()=>{ el.textContent=""; }, 3000);
+  }catch(e){
+    document.getElementById("save-indicator").textContent = "⚠ No se pudo guardar";
+    console.error(e);
+  }
+}
+
+/* ===================== HELPERS ===================== */
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function todayISO(){ return dateToISO(new Date()); }
+function dateToISO(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function isoToLocalDate(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function formatDateDisplay(iso){
+  if(!iso) return "";
+  const d = isoToLocalDate(iso);
+  return d.toLocaleDateString("es-ES",{day:'2-digit',month:'short'});
+}
+function isoWeekday(d){ return (d.getDay()+6)%7; } // 0=Lunes .. 6=Domingo
+function mondayOf(d){
+  const wd = isoWeekday(d);
+  const m = new Date(d);
+  m.setDate(d.getDate()-wd);
+  m.setHours(0,0,0,0);
+  return m;
+}
+
+function deadlineStatus(iso, isDone){
+  if(!iso || isDone) return null;
+  const today = isoToLocalDate(todayISO());
+  const dl = isoToLocalDate(iso);
+  const diffDays = Math.round((dl-today)/86400000);
+  if(diffDays < 0) return "overdue";
+  if(diffDays === 0) return "today";
+  if(diffDays <= 3) return "soon";
+  return "normal";
+}
+function deadlineLabel(iso, status){
+  if(status==="overdue") return "Vencida · " + formatDateDisplay(iso);
+  if(status==="today") return "Vence hoy";
+  if(status==="soon") return "Vence pronto · " + formatDateDisplay(iso);
+  return formatDateDisplay(iso);
+}
+
+const RECUR_UNIT = {daily:["día","días"], weekly:["semana","semanas"], monthly:["mes","meses"]};
+function recurrenceLabel(rec){
+  if(!rec || !rec.freq) return "";
+  const interval = Math.max(1, rec.interval||1);
+  if(interval===1) return rec.freq==="daily"?"Diaria":rec.freq==="weekly"?"Semanal":"Mensual";
+  const [,plural] = RECUR_UNIT[rec.freq]||["",""];
+  return `Cada ${interval} ${plural}`;
+}
+function computeNextDeadline(deadlineISO, freq, interval){
+  interval = Math.max(1, interval||1);
+  let d = isoToLocalDate(deadlineISO || todayISO());
+  let guard = 0;
+  do{
+    if(freq==="daily") d.setDate(d.getDate()+interval);
+    else if(freq==="weekly") d.setDate(d.getDate()+7*interval);
+    else if(freq==="monthly") d.setMonth(d.getMonth()+interval);
+    else d.setDate(d.getDate()+1);
+    guard++;
+  } while(dateToISO(d) < todayISO() && guard<1000);
+  return dateToISO(d);
+}
+
+function quadrantOf(urgent, important){
+  if(urgent && important) return {key:"q1", label:"Hazlo ya", cls:"tag-quad", color:"var(--q1)", bg:"var(--q1-bg)"};
+  if(!urgent && important) return {key:"q2", label:"Agéndalo", cls:"tag-quad", color:"var(--q2)", bg:"var(--q2-bg)"};
+  if(urgent && !important) return {key:"q3", label:"Delega / minimiza", cls:"tag-quad", color:"var(--q3)", bg:"var(--q3-bg)"};
+  return {key:"q4", label:"Cuestiónalo", cls:"tag-quad", color:"var(--q4)", bg:"var(--q4-bg)"};
+}
+const QUAD_ORDER = {q1:0, q2:1, q3:2, q4:3};
+
+function formatDuration(totalSeconds){
+  totalSeconds = Math.round(totalSeconds||0);
+  const h = Math.floor(totalSeconds/3600);
+  const m = Math.floor((totalSeconds%3600)/60);
+  if(h>0) return `${h}h ${String(m).padStart(2,'0')}m`;
+  return `${m}m`;
+}
+function formatHMS(ms){
+  const totalSec = Math.max(0, Math.floor(ms/1000));
+  const h = Math.floor(totalSec/3600);
+  const m = Math.floor((totalSec%3600)/60);
+  const s = totalSec%60;
+  if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function categoryById(id){ return state.categories.find(c=>c.id===id) || null; }
+function getTask(id){ return state.tasks.find(t=>t.id===id) || null; }
+function subtasksOf(projectId){ return state.tasks.filter(t=>t.parentId===projectId); }
+function projectProgress(projectId){
+  const subs = subtasksOf(projectId);
+  if(subs.length===0) return {pct:0, done:0, total:0};
+  const done = subs.filter(s=>s.status==="done").length;
+  return {pct: Math.round(done/subs.length*100), done, total: subs.length};
+}
+
+function escapeHtml(str){
+  return (str||"").replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ===================== TASK CRUD ===================== */
+function addInboxCapture(title){
+  title = title.trim();
+  if(!title) return;
+  state.tasks.push({
+    id: uid(), type:null, parentId:null, title, notes:"",
+    category:null, urgent:false, important:false, deadline:null, weekday:null,
+    status:"todo", inbox:true, timeSpent:0, pomodorosCompleted:0, createdAt: Date.now()
+  });
+  saveState();
+}
+
+function deleteTask(id){
+  const t = getTask(id);
+  if(!t) return;
+  if(t.type==="project"){
+    state.tasks = state.tasks.filter(x=>x.id!==id && x.parentId!==id);
+  } else {
+    state.tasks = state.tasks.filter(x=>x.id!==id);
+  }
+  if(state.activeTimer && state.activeTimer.taskId===id) stopActiveTimer(false);
+  if(state.selectedProjectId===id) state.selectedProjectId=null;
+  saveState();
+}
+
+function spawnNextOccurrence(task){
+  state.tasks.push({
+    id: uid(), type:"simple", parentId:null,
+    title: task.title, notes: task.notes, category: task.category,
+    urgent: task.urgent, important: task.important,
+    deadline: computeNextDeadline(task.deadline, task.recurrence.freq, task.recurrence.interval),
+    weekday: task.weekday, status:"todo", inbox:false,
+    timeSpent:0, pomodorosCompleted:0, createdAt: Date.now(),
+    recurrence: {freq: task.recurrence.freq, interval: task.recurrence.interval}
+  });
+}
+
+/* ===================== RENDER DISPATCH ===================== */
+function render(){
+  document.querySelectorAll("nav.tabs button").forEach(b=>{
+    b.classList.toggle("active", b.dataset.tab===state.activeTab);
+  });
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById("view-"+state.activeTab).classList.add("active");
+
+  const inboxItems = state.tasks.filter(t=>t.inbox);
+  const badge = document.getElementById("inbox-count");
+  if(inboxItems.length>0){ badge.style.display="inline-flex"; badge.textContent = inboxItems.length; }
+  else badge.style.display="none";
+
+  if(state.activeTab==="inbox") renderInbox();
+  else if(state.activeTab==="week") renderWeek();
+  else if(state.activeTab==="board") renderBoard();
+  else if(state.activeTab==="timers") renderTimers();
+}
+
+function switchTab(tab){ state.activeTab = tab; render(); }
+
+/* ===================== CARD BUILDER (shared) ===================== */
+function catTagHtml(catId){
+  const c = categoryById(catId);
+  if(!c) return `<span class="tag tag-normal">Sin categoría</span>`;
+  return `<span class="tag tag-cat" style="background:${c.color}">${escapeHtml(c.name)}</span>`;
+}
+function quadTagHtml(urgent, important){
+  const q = quadrantOf(urgent, important);
+  return `<span class="tag tag-quad" style="color:${q.color};background:${q.bg}">${q.label}</span>`;
+}
+function deadlineTagHtml(iso, isDone){
+  if(!iso) return "";
+  const st = deadlineStatus(iso, isDone);
+  const cls = st==="overdue"?"tag-overdue":st==="today"?"tag-today":st==="soon"?"tag-soon":"tag-normal";
+  return `<span class="tag ${cls}">${deadlineLabel(iso, st)}</span>`;
+}
+
+const SUBTASK_STATUS_LABELS = {todo:"Por hacer", delegated:"Delegado", progress:"En progreso", done:"Hecho"};
+const SUBTASK_STATUS_CYCLE = ["todo","delegated","progress","done"];
+
+function buildCard(task, opts){
+  opts = opts||{};
+  const isProject = task.type==="project";
+  const isDone = task.status==="done";
+  let titleHtml = escapeHtml(task.title);
+  let checkboxHtml = "";
+  if(task.type==="simple"){
+    checkboxHtml = `<input type="checkbox" class="chk" data-action="toggle-simple" data-id="${task.id}" ${isDone?"checked":""}>`;
+  } else if(task.type==="subtask"){
+    checkboxHtml = `<input type="checkbox" class="chk" data-action="cycle-subtask" data-id="${task.id}" ${isDone?"checked":""} title="Clic para cambiar estado: Por hacer → Delegado → En progreso → Hecho">`;
+  }
+  let parentTag = "";
+  if(task.type==="subtask"){
+    const parent = getTask(task.parentId);
+    if(parent) parentTag = `<span class="tag tag-parent">📁 ${escapeHtml(parent.title)}</span>`;
+  }
+  let progressHtml = "";
+  if(isProject){
+    const p = projectProgress(task.id);
+    progressHtml = `<div class="progress-wrap"><div class="progress-bar" style="width:${p.pct}%"></div></div>
+      <div class="progress-label">${p.done}/${p.total} subtareas · ${p.pct}%</div>`;
+  }
+  let statusBadge = "";
+  if(task.type==="subtask" && !isDone){
+    statusBadge = `<span class="tag tag-normal">${SUBTASK_STATUS_LABELS[task.status] || "Por hacer"}</span>`;
+  }
+  const timeHtml = task.timeSpent>0 ? `<span class="tag tag-normal">⏱ ${formatDuration(task.timeSpent)}</span>` : "";
+  const recurHtml = task.recurrence && task.recurrence.freq ? `<span class="tag tag-normal">🔁 ${recurrenceLabel(task.recurrence)}</span>` : "";
+  const editBtn = opts.noEdit ? "" : `<button data-action="edit-task" data-id="${task.id}" title="Editar">✎</button>`;
+  const delBtn = `<button data-action="delete-task" data-id="${task.id}" title="Eliminar" class="btn-danger">✕</button>`;
+
+  return `<div class="card" draggable="${opts.draggable!==false}" data-id="${task.id}">
+    <div class="card-top">
+      ${checkboxHtml}
+      <div style="flex:1">
+        <div class="card-title ${isDone?'done':''}">${isProject?"📁 ":""}${titleHtml}</div>
+        ${task.notes?`<div class="card-notes">${escapeHtml(task.notes)}</div>`:""}
+      </div>
+      <div class="card-actions">${editBtn}${delBtn}</div>
+    </div>
+    ${progressHtml}
+    <div class="card-meta">
+      ${catTagHtml(task.category)}
+      ${quadTagHtml(task.urgent, task.important)}
+      ${statusBadge}
+      ${deadlineTagHtml(task.deadline, isDone)}
+      ${parentTag}
+      ${timeHtml}
+      ${recurHtml}
+    </div>
+  </div>`;
+}
+
+/* ===================== INBOX VIEW ===================== */
+function renderInbox(){
+  const list = document.getElementById("inbox-list");
+  const items = state.tasks.filter(t=>t.inbox).sort((a,b)=>a.createdAt-b.createdAt);
+  if(items.length===0){
+    list.innerHTML = `<div class="empty-state">Inbox vacío. Usa el campo de captura rápida arriba para añadir algo.</div>`;
+    return;
+  }
+  list.innerHTML = items.map(t=>`
+    <div class="inbox-item">
+      <div class="inbox-item-row">
+        <div class="inbox-item-title">${escapeHtml(t.title)}</div>
+        <span class="inbox-item-date">${new Date(t.createdAt).toLocaleDateString("es-ES")}</span>
+      </div>
+      <div class="modal-actions" style="margin-top:10px;justify-content:flex-start;">
+        <button class="btn btn-primary btn-sm" data-action="process" data-id="${t.id}">Procesar</button>
+        <button class="btn btn-sm btn-danger" data-action="delete-task" data-id="${t.id}">Eliminar</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+/* ===================== WEEK VIEW ===================== */
+function renderWeek(){
+  const grid = document.getElementById("week-grid");
+  const todayWd = isoWeekday(new Date());
+  const planned = state.tasks.filter(t=>!t.inbox && t.status!=="done");
+  let html = "";
+  for(let d=0; d<7; d++){
+    const dayTasks = planned.filter(t=>t.weekday===d).sort((a,b)=>{
+      const qa = QUAD_ORDER[quadrantOf(a.urgent,a.important).key];
+      const qb = QUAD_ORDER[quadrantOf(b.urgent,b.important).key];
+      if(qa!==qb) return qa-qb;
+      if(a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+      if(a.deadline) return -1;
+      if(b.deadline) return 1;
+      return 0;
+    });
+    html += `<div class="day-col ${d===todayWd?'today':''}" data-weekday="${d}">
+      <div class="day-col-header"><span>${DAY_NAMES[d]}</span><span class="count">${dayTasks.length}</span></div>
+      <div class="day-body">${dayTasks.map(t=>buildCard(t)).join("") || ""}</div>
+    </div>`;
+  }
+  grid.innerHTML = html;
+
+  // unassigned row
+  const unassigned = planned.filter(t=>t.weekday===null || t.weekday===undefined);
+  let unHtml = `<div class="unassigned-row"><h3 style="font-size:13px;color:var(--text-dim);margin:4px 0 8px;">Sin día asignado</h3>
+    <div class="day-col" data-weekday="none" style="min-height:70px;"><div class="day-body">
+    ${unassigned.length? unassigned.map(t=>buildCard(t)).join("") : '<div class="hint">Arrastra tareas aquí para quitarles el día, o no hay pendientes sin día.</div>'}
+    </div></div></div>`;
+  grid.insertAdjacentHTML("afterend", "");
+  let unWrap = document.getElementById("week-unassigned-wrap");
+  if(!unWrap){
+    unWrap = document.createElement("div");
+    unWrap.id = "week-unassigned-wrap";
+    grid.parentElement.appendChild(unWrap);
+  }
+  unWrap.innerHTML = unHtml;
+
+  attachDnD(grid, ".day-col", "weekday", (task, val)=>{ task.weekday = val==="none"? null : Number(val); saveState(); render(); });
+  attachDnD(unWrap, ".day-col", "weekday", (task, val)=>{ task.weekday = val==="none"? null : Number(val); saveState(); render(); });
+}
+
+/* ===================== BOARD VIEW ===================== */
+function renderBoard(){
+  const projects = state.tasks.filter(t=>t.type==="project");
+  const listEl = document.getElementById("project-list");
+  if(projects.length===0){
+    listEl.innerHTML = `<div class="hint">Aún no hay proyectos. Crea uno o procesa un elemento del inbox como proyecto.</div>`;
+  } else {
+    listEl.innerHTML = projects.map(p=>{
+      const prog = projectProgress(p.id);
+      return `<div class="card ${state.selectedProjectId===p.id?'selected':''}" draggable="false" data-action="select-project" data-id="${p.id}">
+        <div class="card-title">📁 ${escapeHtml(p.title)}</div>
+        <div class="progress-wrap"><div class="progress-bar" style="width:${prog.pct}%"></div></div>
+        <div class="progress-label">${prog.done}/${prog.total} · ${prog.pct}%</div>
+        <div class="card-meta">${catTagHtml(p.category)}${quadTagHtml(p.urgent,p.important)}${deadlineTagHtml(p.deadline,false)}</div>
+      </div>`;
+    }).join("");
+  }
+
+  const kanban = document.getElementById("kanban-area");
+  const project = state.selectedProjectId ? getTask(state.selectedProjectId) : null;
+  if(!project){
+    kanban.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Selecciona un proyecto de la izquierda para ver su tablero.</div>`;
+    return;
+  }
+  const cols = [
+    {key:"todo", label:"Por hacer"},
+    {key:"delegated", label:"Delegado"},
+    {key:"progress", label:"En progreso"},
+    {key:"done", label:"Hecho"}
+  ];
+  const subs = subtasksOf(project.id);
+  kanban.innerHTML = cols.map(col=>{
+    const items = subs.filter(s=>s.status===col.key).sort((a,b)=>{
+      const qa = QUAD_ORDER[quadrantOf(a.urgent,a.important).key];
+      const qb = QUAD_ORDER[quadrantOf(b.urgent,b.important).key];
+      return qa-qb;
+    });
+    return `<div class="kanban-col" data-status="${col.key}">
+      <div class="kanban-col-header"><span>${col.label}</span><span>${items.length}</span></div>
+      <div class="day-body">${items.map(t=>buildCard(t,{noEdit:false})).join("")}</div>
+      ${col.key==="todo" ? `<div class="add-inline">
+        <input type="text" placeholder="+ Nueva subtarea…" data-action="quick-subtask" data-project="${project.id}">
+      </div>` : ""}
+    </div>`;
+  }).join("");
+
+  attachDnD(kanban, ".kanban-col", "status", (task, val)=>{
+    if(task.parentId!==project.id) return;
+    task.status = val; saveState(); render();
+  });
+}
+
+/* ===================== DRAG & DROP (generic) ===================== */
+function attachDnD(container, colSelector, dataAttr, onDrop){
+  container.querySelectorAll(".card[draggable='true']").forEach(card=>{
+    card.addEventListener("dragstart", e=>{
+      e.dataTransfer.setData("text/plain", card.dataset.id);
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", ()=> card.classList.remove("dragging"));
+  });
+  container.querySelectorAll(colSelector).forEach(col=>{
+    col.addEventListener("dragover", e=>{ e.preventDefault(); col.classList.add("dragover"); });
+    col.addEventListener("dragleave", ()=> col.classList.remove("dragover"));
+    col.addEventListener("drop", e=>{
+      e.preventDefault();
+      col.classList.remove("dragover");
+      const id = e.dataTransfer.getData("text/plain");
+      const task = getTask(id);
+      if(!task) return;
+      const val = col.dataset[dataAttr==="weekday"?"weekday":"status"];
+      onDrop(task, val);
+    });
+  });
+}
+
+/* ===================== TIMERS ===================== */
+let tickInterval = null;
+
+function actionableTaskOptions(){
+  return state.tasks.filter(t=>!t.inbox && t.status!=="done");
+}
+
+function renderTimers(){
+  renderTimerPanel();
+  renderPomoSettingsPanel();
+  renderSummaryPanel();
+  if(!tickInterval){
+    tickInterval = setInterval(tickTimers, 500);
+  }
+}
+
+function renderTimerPanel(){
+  const panel = document.getElementById("timer-panel");
+  const at = state.activeTimer;
+  const options = actionableTaskOptions();
+  const selectedId = at ? at.taskId : (panel.dataset.lastSelected || (options[0] && options[0].id) || "");
+
+  let banner = "";
+  if(at){
+    const t = getTask(at.taskId);
+    banner = `<div class="active-timer-banner">
+      <span>⏱ Timer activo en <strong>${t?escapeHtml(t.title):"—"}</strong> (${at.kind==="pomodoro"?"Pomodoro":"Cronómetro"})</span>
+      <button class="btn btn-sm" data-action="goto-active">Ir</button>
+    </div>`;
+  }
+
+  const optHtml = options.map(o=>`<option value="${o.id}" ${o.id===selectedId?"selected":""}>${o.type==="project"?"📁 ":o.type==="subtask"?"↳ ":""}${escapeHtml(o.title)}</option>`).join("");
+
+  const task = getTask(selectedId);
+  const isThisActive = at && at.taskId===selectedId;
+  const kind = isThisActive ? at.kind : (panel.dataset.lastKind || "stopwatch");
+
+  let displayMs = 0, phaseLabel = "", pomoCountLabel = "";
+  if(isThisActive && at.kind==="stopwatch"){
+    displayMs = at.elapsedMs + (at.running ? Date.now()-at.startTimestamp : 0);
+  } else if(isThisActive && at.kind==="pomodoro"){
+    displayMs = at.running ? Math.max(0, at.remainingMs - (Date.now()-at.startTimestamp)) : at.remainingMs;
+    phaseLabel = at.phase==="work" ? "Trabajo" : at.phase==="short" ? "Descanso corto" : "Descanso largo";
+    pomoCountLabel = `🍅 ${task?task.pomodorosCompleted:0} pomodoros completados`;
+  } else {
+    displayMs = kind==="pomodoro" ? state.pomodoroSettings.work*60*1000 : 0;
+    if(kind==="pomodoro"){ phaseLabel="Trabajo"; pomoCountLabel = `🍅 ${task?task.pomodorosCompleted:0} pomodoros completados`; }
+  }
+
+  const stopwatchControls = () => {
+    if(isThisActive && at.kind==="stopwatch"){
+      return at.running
+        ? `<button class="btn" data-action="pause-stopwatch">⏸ Pausar</button><button class="btn btn-danger" data-action="stop-stopwatch">⏹ Detener</button>`
+        : `<button class="btn btn-primary" data-action="resume-stopwatch">▶ Reanudar</button><button class="btn btn-danger" data-action="stop-stopwatch">⏹ Detener</button>`;
+    }
+    return `<button class="btn btn-primary" data-action="start-stopwatch" data-id="${selectedId}">▶ Iniciar cronómetro</button>`;
+  };
+  const pomoControls = () => {
+    if(isThisActive && at.kind==="pomodoro"){
+      return `${at.running?`<button class="btn" data-action="pause-pomo">⏸ Pausar</button>`:`<button class="btn btn-primary" data-action="resume-pomo">▶ Reanudar</button>`}
+        <button class="btn" data-action="skip-pomo">⏭ Saltar fase</button>
+        <button class="btn btn-danger" data-action="stop-pomo">⏹ Detener</button>`;
+    }
+    return `<button class="btn btn-primary" data-action="start-pomo" data-id="${selectedId}">🍅 Iniciar pomodoro</button>`;
+  };
+
+  panel.innerHTML = `
+    <h3>Timer de tarea</h3>
+    ${banner}
+    <div class="field">
+      <label>Tarea</label>
+      <select id="timer-task-select" ${options.length===0?"disabled":""}>
+        ${options.length? optHtml : '<option>No hay tareas disponibles</option>'}
+      </select>
+    </div>
+    <div class="type-switch">
+      <button data-action="set-kind" data-kind="stopwatch" class="${kind==='stopwatch'?'on':''}" ${isThisActive?"disabled":""}>Cronómetro</button>
+      <button data-action="set-kind" data-kind="pomodoro" class="${kind==='pomodoro'?'on':''}" ${isThisActive?"disabled":""}>Pomodoro</button>
+    </div>
+    ${phaseLabel?`<div class="timer-phase">${phaseLabel}</div>`:""}
+    <div class="timer-display">${formatHMS(displayMs)}</div>
+    ${pomoCountLabel?`<div class="pomo-count">${pomoCountLabel}</div>`:""}
+    <div class="timer-controls">${kind==="pomodoro" ? pomoControls() : stopwatchControls()}</div>
+  `;
+
+  const sel = document.getElementById("timer-task-select");
+  if(sel) sel.addEventListener("change", ()=>{ panel.dataset.lastSelected = sel.value; renderTimerPanel(); });
+  panel.querySelectorAll("[data-action='set-kind']").forEach(b=>{
+    b.addEventListener("click", ()=>{ panel.dataset.lastKind = b.dataset.kind; renderTimerPanel(); });
+  });
+}
+
+function renderPomoSettingsPanel(){
+  const panel = document.getElementById("pomo-settings-panel");
+  const s = state.pomodoroSettings;
+  panel.innerHTML = `
+    <h3>Ajustes de Pomodoro</h3>
+    <div class="settings-grid">
+      <div class="field"><label>Trabajo (min)</label><input type="number" min="1" id="pomo-work" value="${s.work}"></div>
+      <div class="field"><label>Descanso corto (min)</label><input type="number" min="1" id="pomo-short" value="${s.shortBreak}"></div>
+      <div class="field"><label>Descanso largo (min)</label><input type="number" min="1" id="pomo-long" value="${s.longBreak}"></div>
+      <div class="field"><label>Pomodoros p/ descanso largo</label><input type="number" min="1" id="pomo-cycles" value="${s.cycles}"></div>
+    </div>
+    <button class="btn btn-primary btn-sm" id="btn-save-pomo-settings">Guardar ajustes</button>
+    <div class="hint">Los cambios se aplican al próximo pomodoro que inicies.</div>
+  `;
+  document.getElementById("btn-save-pomo-settings").addEventListener("click", ()=>{
+    state.pomodoroSettings = {
+      work: Math.max(1, Number(document.getElementById("pomo-work").value)||25),
+      shortBreak: Math.max(1, Number(document.getElementById("pomo-short").value)||5),
+      longBreak: Math.max(1, Number(document.getElementById("pomo-long").value)||15),
+      cycles: Math.max(1, Number(document.getElementById("pomo-cycles").value)||4),
+    };
+    saveState();
+    renderPomoSettingsPanel();
+  });
+}
+
+function renderSummaryPanel(){
+  const panel = document.getElementById("summary-panel");
+  const today = todayISO();
+  const monday = dateToISO(mondayOf(new Date()));
+  const sundayDate = new Date(mondayOf(new Date())); sundayDate.setDate(sundayDate.getDate()+6);
+  const sunday = dateToISO(sundayDate);
+
+  const totals = {}; // catId -> {today, week}
+  state.categories.forEach(c=> totals[c.id] = {today:0, week:0});
+  totals["_none"] = {today:0, week:0};
+
+  state.timeLog.forEach(e=>{
+    const key = e.category && totals[e.category] ? e.category : "_none";
+    if(e.dateISO === today) totals[key].today += e.seconds;
+    if(e.dateISO >= monday && e.dateISO <= sunday) totals[key].week += e.seconds;
+  });
+
+  let grandToday=0, grandWeek=0;
+  const rows = state.categories.map(c=>{
+    grandToday += totals[c.id].today; grandWeek += totals[c.id].week;
+    return `<tr><td><span class="cat-dot" style="background:${c.color}"></span>${escapeHtml(c.name)}</td>
+      <td>${formatDuration(totals[c.id].today)}</td><td>${formatDuration(totals[c.id].week)}</td></tr>`;
+  }).join("");
+  grandToday += totals["_none"].today; grandWeek += totals["_none"].week;
+  const noneRow = totals["_none"].today+totals["_none"].week>0
+    ? `<tr><td><span class="cat-dot" style="background:#c4c8ce"></span>Sin categoría</td><td>${formatDuration(totals["_none"].today)}</td><td>${formatDuration(totals["_none"].week)}</td></tr>` : "";
+
+  panel.innerHTML = `
+    <h3>Resumen de tiempo</h3>
+    <table class="summary">
+      <thead><tr><th>Categoría</th><th>Hoy</th><th>Esta semana</th></tr></thead>
+      <tbody>
+        ${rows}
+        ${noneRow}
+        <tr><td>Total</td><td>${formatDuration(grandToday)}</td><td>${formatDuration(grandWeek)}</td></tr>
+      </tbody>
+    </table>
+  `;
+}
+
+function logTime(taskId, category, seconds){
+  if(seconds<=0) return;
+  state.timeLog.push({id:uid(), taskId, category, seconds, dateISO: todayISO()});
+  const t = getTask(taskId);
+  if(t) t.timeSpent = (t.timeSpent||0) + seconds;
+}
+
+function startStopwatch(taskId){
+  if(state.activeTimer) stopActiveTimer(true);
+  state.activeTimer = {taskId, kind:"stopwatch", elapsedMs:0, running:true, startTimestamp:Date.now()};
+  saveState(); renderTimers();
+}
+function pauseStopwatch(){
+  const at = state.activeTimer;
+  if(!at || at.kind!=="stopwatch" || !at.running) return;
+  const delta = Date.now()-at.startTimestamp;
+  at.elapsedMs += delta;
+  at.running = false;
+  const task = getTask(at.taskId);
+  logTime(at.taskId, task?task.category:null, delta/1000);
+  saveState(); renderTimers();
+}
+function resumeStopwatch(){
+  const at = state.activeTimer;
+  if(!at || at.kind!=="stopwatch" || at.running) return;
+  at.running = true; at.startTimestamp = Date.now();
+  saveState(); renderTimers();
+}
+function stopStopwatch(){
+  const at = state.activeTimer;
+  if(!at || at.kind!=="stopwatch") return;
+  if(at.running){
+    const delta = Date.now()-at.startTimestamp;
+    const task = getTask(at.taskId);
+    logTime(at.taskId, task?task.category:null, delta/1000);
+  }
+  state.activeTimer = null;
+  saveState(); renderTimers();
+}
+
+function startPomodoro(taskId){
+  if(state.activeTimer) stopActiveTimer(true);
+  const s = state.pomodoroSettings;
+  state.activeTimer = {
+    taskId, kind:"pomodoro", phase:"work", cycleCount:0,
+    remainingMs: s.work*60*1000, running:true, startTimestamp: Date.now()
+  };
+  saveState(); renderTimers();
+}
+function pausePomodoro(){
+  const at = state.activeTimer;
+  if(!at || at.kind!=="pomodoro" || !at.running) return;
+  const remaining = Math.max(0, at.remainingMs - (Date.now()-at.startTimestamp));
+  if(at.phase==="work"){
+    const elapsedThisSpan = at.remainingMs - remaining;
+    const task = getTask(at.taskId);
+    logTime(at.taskId, task?task.category:null, elapsedThisSpan/1000);
+  }
+  at.remainingMs = remaining;
+  at.running = false;
+  saveState(); renderTimers();
+}
+function resumePomodoro(){
+  const at = state.activeTimer;
+  if(!at || at.kind!=="pomodoro" || at.running) return;
+  at.running = true; at.startTimestamp = Date.now();
+  saveState(); renderTimers();
+}
+function stopActiveTimer(silent){
+  const at = state.activeTimer;
+  if(!at) return;
+  if(at.kind==="stopwatch") { stopStopwatch(); return; }
+  if(at.kind==="pomodoro"){
+    if(at.running && at.phase==="work"){
+      const remaining = Math.max(0, at.remainingMs - (Date.now()-at.startTimestamp));
+      const elapsedThisSpan = at.remainingMs - remaining;
+      const task = getTask(at.taskId);
+      logTime(at.taskId, task?task.category:null, elapsedThisSpan/1000);
+    }
+    state.activeTimer = null;
+    if(!silent){ saveState(); renderTimers(); }
+  }
+}
+function skipPomoPhase(){
+  const at = state.activeTimer;
+  if(!at || at.kind!=="pomodoro") return;
+  if(at.phase==="work"){
+    const remaining = at.running ? Math.max(0, at.remainingMs - (Date.now()-at.startTimestamp)) : at.remainingMs;
+    const elapsedThisSpan = at.remainingMs - remaining;
+    const task = getTask(at.taskId);
+    logTime(at.taskId, task?task.category:null, elapsedThisSpan/1000);
+    // Manual skip: don't count as a completed pomodoro, just move to the next phase.
+    at.phase = "short";
+    at.remainingMs = state.pomodoroSettings.shortBreak*60*1000;
+    at.running = true; at.startTimestamp = Date.now();
+  } else {
+    at.phase = "work"; at.remainingMs = state.pomodoroSettings.work*60*1000;
+    at.running = true; at.startTimestamp = Date.now();
+  }
+  saveState(); renderTimers();
+}
+
+function tickTimers(){
+  const at = state.activeTimer;
+  if(!at){ return; }
+  if(state.activeTab==="timers"){
+    if(at.kind==="stopwatch"){
+      const el = document.querySelector(".timer-display");
+      if(el) el.textContent = formatHMS(at.elapsedMs + (at.running?Date.now()-at.startTimestamp:0));
+    } else if(at.kind==="pomodoro" && at.running){
+      const remaining = at.remainingMs - (Date.now()-at.startTimestamp);
+      if(remaining <= 0){
+        // log the completed work span before switching (avoid double logging via advancePomoPhase)
+        if(at.phase==="work"){
+          const task = getTask(at.taskId);
+          logTime(at.taskId, task?task.category:null, at.remainingMs/1000);
+        }
+        advancePomoPhaseClean(at);
+        saveState();
+      }
+      renderTimerPanel();
+    }
+  }
+}
+function advancePomoPhaseClean(at){
+  const s = state.pomodoroSettings;
+  const task = getTask(at.taskId);
+  if(at.phase==="work"){
+    if(task) task.pomodorosCompleted = (task.pomodorosCompleted||0)+1;
+    at.cycleCount += 1;
+    if(at.cycleCount % s.cycles === 0){ at.phase="long"; at.remainingMs = s.longBreak*60*1000; }
+    else { at.phase="short"; at.remainingMs = s.shortBreak*60*1000; }
+  } else {
+    at.phase = "work"; at.remainingMs = s.work*60*1000;
+  }
+  at.running = true; at.startTimestamp = Date.now();
+}
+
+/* ===================== MODALS ===================== */
+function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
+
+function openModal(innerHtml){
+  const root = document.getElementById("modal-root");
+  root.innerHTML = `<div class="modal-overlay" id="modal-overlay"><div class="modal">${innerHtml}</div></div>`;
+  document.getElementById("modal-overlay").addEventListener("click", e=>{
+    if(e.target.id==="modal-overlay") closeModal();
+  });
+}
+
+function categoryOptionsHtml(selected){
+  return `<option value="">Sin categoría</option>` + state.categories.map(c=>
+    `<option value="${c.id}" ${c.id===selected?"selected":""}>${escapeHtml(c.name)}</option>`
+  ).join("");
+}
+function weekdayOptionsHtml(selected){
+  return `<option value="">Sin día asignado</option>` + DAY_NAMES.map((n,i)=>
+    `<option value="${i}" ${i===selected?"selected":""}>${n}</option>`
+  ).join("");
+}
+
+// Unified task form modal.
+// mode: 'process-simple' | 'process-project' | 'new-simple' | 'new-project' | 'new-subtask' | 'edit'
+function openTaskFormModal(mode, task, extra){
+  extra = extra || {};
+  const isProject = mode.includes("project");
+  const isSubtask = mode==="new-subtask" || (mode==="edit" && task.type==="subtask");
+  const isSimple = mode.includes("simple") || (mode==="edit" && task.type==="simple");
+  const deadlineRequired = isSimple;
+  const title = task ? task.title : (extra.initialTitle||"");
+  const notes = task ? task.notes : "";
+  const category = task ? task.category : null;
+  const urgent = task ? task.urgent : false;
+  const important = task ? task.important : false;
+  const deadline = task ? task.deadline : "";
+  const weekday = task ? task.weekday : null;
+  const recurrence = task && task.recurrence && task.recurrence.freq ? task.recurrence : null;
+
+  let heading = "Editar tarea";
+  if(mode==="process-simple") heading = "Procesar: tarea simple";
+  if(mode==="process-project") heading = "Procesar: proyecto";
+  if(mode==="new-simple") heading = "Nueva tarea simple";
+  if(mode==="new-project") heading = "Nuevo proyecto";
+  if(mode==="new-subtask") heading = "Nueva subtarea";
+  if(mode==="edit" && task.type==="project") heading = "Editar proyecto";
+  if(mode==="edit" && task.type==="subtask") heading = "Editar subtarea";
+
+  const q = quadrantOf(urgent, important);
+  const subtaskSeedField = (mode==="process-project" || mode==="new-project")
+    ? `<div class="field"><label>Subtareas iniciales (una por línea, opcional)</label><textarea id="f-subtasks" placeholder="Ej: Investigar proveedores&#10;Redactar propuesta"></textarea></div>`
+    : "";
+  const recurField = isSimple ? `<div class="field">
+      <label>Repetición (opcional)</label>
+      <div class="row2">
+        <select id="f-recur-freq">
+          <option value="" ${!recurrence?"selected":""}>No se repite</option>
+          <option value="daily" ${recurrence&&recurrence.freq==="daily"?"selected":""}>Diaria</option>
+          <option value="weekly" ${recurrence&&recurrence.freq==="weekly"?"selected":""}>Semanal</option>
+          <option value="monthly" ${recurrence&&recurrence.freq==="monthly"?"selected":""}>Mensual</option>
+        </select>
+        <input type="number" id="f-recur-interval" min="1" value="${recurrence?recurrence.interval:1}" placeholder="Cada N" ${!recurrence?'style="display:none"':""}>
+      </div>
+      <div class="hint" id="f-recur-hint"></div>
+    </div>` : "";
+
+  openModal(`
+    <h3>${heading}</h3>
+    <div class="field"><label>Título</label><input type="text" id="f-title" value="${escapeHtml(title)}" placeholder="¿Qué hay que hacer?"></div>
+    <div class="field"><label>Notas (opcional)</label><textarea id="f-notes" placeholder="Detalles adicionales…">${escapeHtml(notes)}</textarea></div>
+    <div class="row2">
+      <div class="field"><label>Categoría</label><select id="f-category">${categoryOptionsHtml(category)}</select></div>
+      <div class="field"><label>Día de la semana (opcional)</label><select id="f-weekday">${weekdayOptionsHtml(weekday)}</select></div>
+    </div>
+    <div class="field">
+      <label>Prioridad Eisenhower</label>
+      <div class="toggle-group">
+        <button type="button" class="toggle-btn ${urgent?'on':''}" id="f-urgent" data-val="${urgent}">Urgente</button>
+        <button type="button" class="toggle-btn ${important?'on':''}" id="f-important" data-val="${important}">Importante</button>
+      </div>
+      <div class="quad-preview" id="f-quad-preview" style="color:${q.color};background:${q.bg}">${q.label}</div>
+    </div>
+    <div class="field"><label>Fecha límite ${deadlineRequired?"(obligatoria)":"(opcional)"}</label><input type="date" id="f-deadline" value="${deadline||""}"></div>
+    ${recurField}
+    ${subtaskSeedField}
+    <div class="modal-actions">
+      <button class="btn" id="f-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="f-save">Guardar</button>
+    </div>
+  `);
+
+  const urgentBtn = document.getElementById("f-urgent");
+  const importantBtn = document.getElementById("f-important");
+  function refreshQuad(){
+    const u = urgentBtn.dataset.val==="true";
+    const i = importantBtn.dataset.val==="true";
+    urgentBtn.classList.toggle("on", u);
+    importantBtn.classList.toggle("on", i);
+    const qq = quadrantOf(u,i);
+    const prev = document.getElementById("f-quad-preview");
+    prev.textContent = qq.label;
+    prev.style.color = qq.color; prev.style.background = qq.bg;
+  }
+  urgentBtn.addEventListener("click", ()=>{ urgentBtn.dataset.val = urgentBtn.dataset.val!=="true"; refreshQuad(); });
+  importantBtn.addEventListener("click", ()=>{ importantBtn.dataset.val = importantBtn.dataset.val!=="true"; refreshQuad(); });
+
+  if(isSimple){
+    const freqSel = document.getElementById("f-recur-freq");
+    const intervalInput = document.getElementById("f-recur-interval");
+    const hint = document.getElementById("f-recur-hint");
+    function refreshRecurUI(){
+      const freq = freqSel.value;
+      intervalInput.style.display = freq ? "" : "none";
+      if(freq){
+        const n = Math.max(1, Number(intervalInput.value)||1);
+        hint.textContent = "Se repite: " + recurrenceLabel({freq, interval:n}) + ". Al marcarla como hecha se creará la siguiente ocurrencia.";
+      } else {
+        hint.textContent = "";
+      }
+    }
+    freqSel.addEventListener("change", refreshRecurUI);
+    intervalInput.addEventListener("input", refreshRecurUI);
+    refreshRecurUI();
+  }
+
+  document.getElementById("f-cancel").addEventListener("click", closeModal);
+  document.getElementById("f-save").addEventListener("click", ()=>{
+    const titleVal = document.getElementById("f-title").value.trim();
+    if(!titleVal){ alert("El título no puede estar vacío."); return; }
+    const deadlineVal = document.getElementById("f-deadline").value || null;
+    if(deadlineRequired && !deadlineVal){ alert("Las tareas simples requieren fecha límite."); return; }
+    const notesVal = document.getElementById("f-notes").value.trim();
+    const catVal = document.getElementById("f-category").value || null;
+    const wdVal = document.getElementById("f-weekday").value;
+    const urgentVal = urgentBtn.dataset.val==="true";
+    const importantVal = importantBtn.dataset.val==="true";
+    const weekdayVal = wdVal===""? null : Number(wdVal);
+    let recurrenceVal = null;
+    if(isSimple){
+      const freqVal = document.getElementById("f-recur-freq").value;
+      if(freqVal){
+        const intervalVal = Math.max(1, Number(document.getElementById("f-recur-interval").value)||1);
+        recurrenceVal = {freq:freqVal, interval:intervalVal};
+      }
+    }
+
+    if(mode==="process-simple"){
+      Object.assign(task, {type:"simple", inbox:false, title:titleVal, notes:notesVal, category:catVal,
+        urgent:urgentVal, important:importantVal, deadline:deadlineVal, weekday:weekdayVal, status:"todo",
+        recurrence:recurrenceVal});
+    } else if(mode==="process-project"){
+      Object.assign(task, {type:"project", inbox:false, title:titleVal, notes:notesVal, category:catVal,
+        urgent:urgentVal, important:importantVal, deadline:deadlineVal, weekday:weekdayVal});
+      addSeedSubtasks(task.id);
+    } else if(mode==="new-simple"){
+      state.tasks.push({id:uid(), type:"simple", parentId:null, title:titleVal, notes:notesVal, category:catVal,
+        urgent:urgentVal, important:importantVal, deadline:deadlineVal, weekday:weekdayVal, status:"todo",
+        inbox:false, timeSpent:0, pomodorosCompleted:0, createdAt:Date.now(), recurrence:recurrenceVal});
+    } else if(mode==="new-project"){
+      const id = uid();
+      state.tasks.push({id, type:"project", parentId:null, title:titleVal, notes:notesVal, category:catVal,
+        urgent:urgentVal, important:importantVal, deadline:deadlineVal, weekday:weekdayVal, status:"todo",
+        inbox:false, timeSpent:0, pomodorosCompleted:0, createdAt:Date.now()});
+      addSeedSubtasks(id);
+      state.selectedProjectId = id;
+    } else if(mode==="new-subtask"){
+      state.tasks.push({id:uid(), type:"subtask", parentId:extra.parentId, title:titleVal, notes:notesVal, category:catVal,
+        urgent:urgentVal, important:importantVal, deadline:deadlineVal, weekday:weekdayVal, status:"todo",
+        inbox:false, timeSpent:0, pomodorosCompleted:0, createdAt:Date.now()});
+    } else if(mode==="edit"){
+      const patch = {title:titleVal, notes:notesVal, category:catVal,
+        urgent:urgentVal, important:importantVal, deadline:deadlineVal, weekday:weekdayVal};
+      if(isSimple) patch.recurrence = recurrenceVal;
+      Object.assign(task, patch);
+    }
+    saveState();
+    closeModal();
+    render();
+  });
+
+  function addSeedSubtasks(projectId){
+    const ta = document.getElementById("f-subtasks");
+    if(!ta) return;
+    const lines = ta.value.split("\n").map(l=>l.trim()).filter(Boolean);
+    lines.forEach(line=>{
+      state.tasks.push({id:uid(), type:"subtask", parentId:projectId, title:line, notes:"",
+        category:catVal(), urgent:false, important:false, deadline:null, weekday:null, status:"todo",
+        inbox:false, timeSpent:0, pomodorosCompleted:0, createdAt:Date.now()});
+    });
+    function catVal(){ return document.getElementById("f-category").value || null; }
+  }
+}
+
+function openProcessTypeChoice(task){
+  openModal(`
+    <h3>Procesar: "${escapeHtml(task.title)}"</h3>
+    <p class="hint" style="margin-bottom:14px;">¿Qué tipo de elemento es?</p>
+    <div class="type-switch">
+      <button id="choose-simple">Tarea simple</button>
+      <button id="choose-project">Proyecto</button>
+    </div>
+    <div class="modal-actions"><button class="btn" id="f-cancel">Cancelar</button></div>
+  `);
+  document.getElementById("f-cancel").addEventListener("click", closeModal);
+  document.getElementById("choose-simple").addEventListener("click", ()=> openTaskFormModal("process-simple", task));
+  document.getElementById("choose-project").addEventListener("click", ()=> openTaskFormModal("process-project", task));
+}
+
+function openCategoriesModal(){
+  function body(){
+    return `
+    <h3>Categorías</h3>
+    <div id="cat-rows">${state.categories.map(c=>`
+      <div class="cat-manage-row" data-id="${c.id}">
+        <input type="color" class="cat-color-swatch" value="${c.color}" data-action="cat-color" data-id="${c.id}">
+        <input type="text" value="${escapeHtml(c.name)}" data-action="cat-name" data-id="${c.id}">
+        <button class="btn btn-icon btn-danger" data-action="cat-delete" data-id="${c.id}">✕</button>
+      </div>`).join("")}
+    </div>
+    <div class="add-inline" style="margin-top:12px;">
+      <input type="text" id="new-cat-name" placeholder="Nueva categoría…">
+      <input type="color" id="new-cat-color" value="#8b5cf6" class="cat-color-swatch">
+      <button class="btn btn-primary btn-sm" id="add-cat">Añadir</button>
+    </div>
+    <div class="modal-actions"><button class="btn btn-primary" id="f-close">Cerrar</button></div>
+    `;
+  }
+  openModal(body());
+  attachCategoryHandlers();
+
+  function attachCategoryHandlers(){
+    document.getElementById("f-close").addEventListener("click", ()=>{ closeModal(); render(); });
+    document.getElementById("add-cat").addEventListener("click", ()=>{
+      const nameInput = document.getElementById("new-cat-name");
+      const name = nameInput.value.trim();
+      if(!name) return;
+      const color = document.getElementById("new-cat-color").value;
+      state.categories.push({id:uid(), name, color});
+      saveState();
+      refresh();
+    });
+    document.querySelectorAll("[data-action='cat-name']").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        const c = categoryById(inp.dataset.id);
+        if(c){ c.name = inp.value.trim() || c.name; saveState(); }
+      });
+    });
+    document.querySelectorAll("[data-action='cat-color']").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        const c = categoryById(inp.dataset.id);
+        if(c){ c.color = inp.value; saveState(); }
+      });
+    });
+    document.querySelectorAll("[data-action='cat-delete']").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = btn.dataset.id;
+        const inUse = state.tasks.some(t=>t.category===id);
+        if(inUse){ alert("No puedes eliminar una categoría en uso. Reasigna esas tareas a otra categoría primero."); return; }
+        state.categories = state.categories.filter(c=>c.id!==id);
+        saveState();
+        refresh();
+      });
+    });
+  }
+  function refresh(){
+    document.querySelector("#modal-overlay .modal").innerHTML = body();
+    attachCategoryHandlers();
+  }
+}
+
+/* ===================== EVENT WIRING ===================== */
+document.getElementById("capture-form").addEventListener("submit", e=>{
+  e.preventDefault();
+  const input = document.getElementById("capture-input");
+  addInboxCapture(input.value);
+  input.value = "";
+  render();
+});
+
+document.getElementById("tabs").addEventListener("click", e=>{
+  const btn = e.target.closest("button[data-tab]");
+  if(btn) switchTab(btn.dataset.tab);
+});
+
+document.getElementById("btn-categories").addEventListener("click", openCategoriesModal);
+
+document.getElementById("btn-export").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = todayISO();
+  a.href = url; a.download = `gtd-eisenhower-backup-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+});
+document.getElementById("btn-import").addEventListener("click", ()=> document.getElementById("file-import").click());
+document.getElementById("file-import").addEventListener("change", e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!parsed || !Array.isArray(parsed.tasks)) throw new Error("Formato inválido");
+      if(!confirm("Esto reemplazará todos los datos actuales con el archivo importado. ¿Continuar?")) return;
+      state = Object.assign(defaultState(), parsed);
+      saveState();
+      render();
+    }catch(err){
+      alert("No se pudo importar el archivo: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+document.getElementById("btn-new-project").addEventListener("click", ()=> openTaskFormModal("new-project", null));
+
+// Global delegated click handler for card/list actions
+document.body.addEventListener("click", e=>{
+  const el = e.target.closest("[data-action]");
+  if(!el) return;
+  const action = el.dataset.action;
+  const id = el.dataset.id;
+
+  if(action==="process"){ openProcessTypeChoice(getTask(id)); return; }
+  if(action==="edit-task"){ openTaskFormModal("edit", getTask(id)); return; }
+  if(action==="delete-task"){
+    if(confirm("¿Eliminar esta tarea" + (getTask(id)&&getTask(id).type==="project" ? " y todas sus subtareas" : "") + "?")){
+      deleteTask(id); render();
+    }
+    return;
+  }
+  if(action==="select-project"){ state.selectedProjectId = id; render(); return; }
+  if(action==="goto-active"){
+    switchTab("timers");
+    const at = state.activeTimer;
+    if(at){ document.getElementById("timer-panel").dataset.lastSelected = at.taskId; document.getElementById("timer-panel").dataset.lastKind = at.kind; renderTimerPanel(); }
+    return;
+  }
+  if(action==="start-stopwatch"){ startStopwatch(id); return; }
+  if(action==="pause-stopwatch"){ pauseStopwatch(); return; }
+  if(action==="resume-stopwatch"){ resumeStopwatch(); return; }
+  if(action==="stop-stopwatch"){ stopStopwatch(); return; }
+  if(action==="start-pomo"){ startPomodoro(id); return; }
+  if(action==="pause-pomo"){ pausePomodoro(); return; }
+  if(action==="resume-pomo"){ resumePomodoro(); return; }
+  if(action==="stop-pomo"){ stopActiveTimer(false); return; }
+  if(action==="skip-pomo"){ skipPomoPhase(); return; }
+});
+
+document.body.addEventListener("change", e=>{
+  const el = e.target;
+  if(el.dataset && el.dataset.action==="toggle-simple"){
+    const t = getTask(el.dataset.id);
+    if(t){
+      t.status = el.checked ? "done" : "todo";
+      if(el.checked && t.recurrence && t.recurrence.freq) spawnNextOccurrence(t);
+      saveState(); render();
+    }
+  }
+});
+
+// cycle-subtask needs multi-state behavior on click, not just checkbox change
+document.body.addEventListener("click", e=>{
+  const el = e.target.closest("[data-action='cycle-subtask']");
+  if(!el) return;
+  e.preventDefault();
+  const t = getTask(el.dataset.id);
+  if(!t) return;
+  const idx = SUBTASK_STATUS_CYCLE.indexOf(t.status);
+  t.status = SUBTASK_STATUS_CYCLE[(idx+1) % SUBTASK_STATUS_CYCLE.length] || "todo";
+  el.checked = t.status==="done";
+  saveState(); render();
+});
+
+document.body.addEventListener("keydown", e=>{
+  if(e.target.dataset && e.target.dataset.action==="quick-subtask" && e.key==="Enter"){
+    const val = e.target.value.trim();
+    if(!val) return;
+    const projectId = e.target.dataset.project;
+    state.tasks.push({id:uid(), type:"subtask", parentId:projectId, title:val, notes:"",
+      category: getTask(projectId)?.category||null, urgent:false, important:false, deadline:null, weekday:null,
+      status:"todo", inbox:false, timeSpent:0, pomodorosCompleted:0, createdAt:Date.now()});
+    saveState();
+    render();
+  }
+});
+
+// Add a "+ Nueva tarea simple" button dynamically into the week view header area
+(function addWeekQuickButton(){
+  const viewWeek = document.getElementById("view-week");
+  const btn = document.createElement("button");
+  btn.className = "btn btn-primary";
+  btn.textContent = "+ Nueva tarea simple";
+  btn.style.marginBottom = "12px";
+  btn.addEventListener("click", ()=> openTaskFormModal("new-simple", null));
+  viewWeek.querySelector("h2").insertAdjacentElement("afterend", btn);
+})();
+
+/* ===================== INIT ===================== */
+render();
+
+})();
+</script>
+</body>
+</html>
