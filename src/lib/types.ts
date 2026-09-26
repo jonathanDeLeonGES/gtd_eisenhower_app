@@ -5,6 +5,29 @@ export type TaskStatus = "todo" | "delegated" | "progress" | "done";
 /** Project-level GTD lifecycle state — independent of subtask progress. */
 export type ProjectState = "active" | "paused" | "someday" | "done";
 
+/** Goals sit above projects (GTD "horizons"): goal → sub-goals → projects → tasks. */
+export type GoalStatus = "backlog" | "in_progress" | "paused" | "done" | "dropped";
+export type GoalPriority = "high" | "medium" | "low";
+
+export interface Goal {
+  id: string;
+  parentId: string | null;
+  title: string;
+  notes: string;
+  /** Expected outcome: how you'll know it's achieved. */
+  outcome: string;
+  category: string | null;
+  status: GoalStatus;
+  priority: GoalPriority | null;
+  startDate: string | null; // ISO yyyy-mm-dd
+  endDate: string | null; // ISO yyyy-mm-dd
+  reviewDate: string | null; // next review, ISO yyyy-mm-dd
+  icon: string; // emoji
+  /** Position among siblings (ascending). */
+  order: number;
+  createdAt: number;
+}
+
 export type RecurrenceFreq = "daily" | "weekly" | "monthly";
 
 export interface Recurrence {
@@ -41,6 +64,8 @@ export interface Task {
   reviewDate?: string | null;
   /** Subtask only: who you're waiting on, when status is "delegated". */
   waitingOn?: string | null;
+  /** Project only: the goal this project contributes to (optional). */
+  goalId?: string | null;
 }
 
 export interface TimeLogEntry {
@@ -100,6 +125,24 @@ export const PROJECT_STATE_LABELS: Record<ProjectState, string> = {
 };
 
 export const PROJECT_STATE_ORDER: ProjectState[] = ["active", "paused", "someday", "done"];
+
+export const GOAL_STATUS_LABELS: Record<GoalStatus, string> = {
+  backlog: "Backlog",
+  in_progress: "En progreso",
+  paused: "En pausa",
+  done: "Lograda",
+  dropped: "Descartada",
+};
+export const GOAL_STATUS_ORDER: GoalStatus[] = ["backlog", "in_progress", "paused", "done", "dropped"];
+
+export const GOAL_PRIORITY_LABELS: Record<GoalPriority, string> = {
+  high: "Alta",
+  medium: "Media",
+  low: "Baja",
+};
+export const GOAL_PRIORITY_ORDER: GoalPriority[] = ["high", "medium", "low"];
+
+export const GOAL_ICONS = ["🎯", "🚀", "📚", "💼", "💰", "🏠", "💪", "🧠", "🌎", "🎓", "🛠️", "❤️"];
 
 export const DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 export const DAY_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];

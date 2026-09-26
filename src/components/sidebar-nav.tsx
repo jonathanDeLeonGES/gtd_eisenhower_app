@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Inbox, CalendarDays, KanbanSquare, Timer, Sparkles, Tags, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Inbox, CalendarDays, KanbanSquare, Timer, Target, Sparkles, Tags, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useTaskStore } from "@/lib/store";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 const NAV_ITEMS = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/semana", label: "Planificación semanal", icon: CalendarDays },
+  { href: "/metas", label: "Metas", icon: Target },
   { href: "/proyectos", label: "Proyectos", icon: KanbanSquare },
   { href: "/timers", label: "Timers", icon: Timer },
 ];

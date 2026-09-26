@@ -22,6 +22,7 @@ export function DataMenu() {
     const data = {
       categories: state.categories,
       tasks: state.tasks,
+      goals: state.goals,
       timeLog: state.timeLog,
       pomodoroSettings: state.pomodoroSettings,
       activeTimer: state.activeTimer,

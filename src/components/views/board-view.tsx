@@ -12,7 +12,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { motion } from "framer-motion";
-import { Plus, FolderKanban, Pencil, Trash2, AlertTriangle, Clock, Search, X } from "lucide-react";
+import { Plus, FolderKanban, Pencil, Trash2, AlertTriangle, Clock, Search, X, Target } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { TaskCard } from "@/components/task-card";
 import { TaskFormModal, type TaskFormMode } from "@/components/task-form-modal";
 import { useTaskStore, subtasksOf, projectProgress, getProjectActionStatus, projectNeedsNextAction, categoryById } from "@/lib/store";
 import { quadrantOf, QUAD_ORDER, QUAD_STYLES } from "@/lib/quadrant";
+import { goalPath } from "@/lib/goals";
 import { KANBAN_COLUMNS, PROJECT_STATE_LABELS, type ProjectState, type Task, type TaskStatus } from "@/lib/types";
 
 const NO_CATEGORY = "__none__";
@@ -79,6 +80,8 @@ function ProjectCard({ project, active, onSelect, onEdit, onDelete }: {
 }) {
   const tasks = useTaskStore((s) => s.tasks);
   const categories = useTaskStore((s) => s.categories);
+  const goals = useTaskStore((s) => s.goals);
+  const goal = project.goalId ? goals.find((g) => g.id === project.goalId) : undefined;
   const prog = projectProgress(tasks, project.id);
   const category = categoryById(categories, project.category);
   const quad = quadrantOf(project.urgent, project.important);
@@ -117,6 +120,15 @@ function ProjectCard({ project, active, onSelect, onEdit, onDelete }: {
           <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold", QUAD_STYLES[quad.key])}>{quad.label}</span>
           {state !== "active" && (
             <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[10px] font-semibold">{PROJECT_STATE_LABELS[state]}</span>
+          )}
+          {goal && (
+            <span
+              title={`Meta: ${goalPath(goals, goal.id)}`}
+              className="bg-primary/10 text-primary inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            >
+              <Target className="size-3 shrink-0" />
+              <span className="truncate">{goal.title}</span>
+            </span>
           )}
         </div>
         {actionStatus === "stalled" && (

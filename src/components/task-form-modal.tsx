@@ -21,6 +21,7 @@ import {
 import { useTaskStore, type TaskFormInput } from "@/lib/store";
 import { quadrantOf, QUAD_STYLES } from "@/lib/quadrant";
 import { recurrenceLabel } from "@/lib/date-utils";
+import { flattenGoals } from "@/lib/goals";
 import { DAY_NAMES, PROJECT_STATE_LABELS, PROJECT_STATE_ORDER, type ProjectState, type RecurrenceFreq, type Task } from "@/lib/types";
 
 export type TaskFormMode = "process-simple" | "process-project" | "new-simple" | "new-project" | "new-subtask" | "edit";
@@ -32,6 +33,8 @@ export function TaskFormModal({
   task,
   parentId,
   onSaved,
+  defaultGoalId,
+  defaultCategory,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -40,8 +43,14 @@ export function TaskFormModal({
   parentId?: string;
   /** Called after a successful save; receives the new project's id when one was created. */
   onSaved?: (createdId?: string) => void;
+  /** New projects: pre-link to this goal. */
+  defaultGoalId?: string | null;
+  /** New projects: pre-select this category. */
+  defaultCategory?: string | null;
 }) {
   const categories = useTaskStore((s) => s.categories);
+  const goals = useTaskStore((s) => s.goals);
+  const goalOptions = React.useMemo(() => flattenGoals(goals), [goals]);
   const processTaskAsSimple = useTaskStore((s) => s.processTaskAsSimple);
   const processTaskAsProject = useTaskStore((s) => s.processTaskAsProject);
   const createSimpleTask = useTaskStore((s) => s.createSimpleTask);
@@ -74,6 +83,7 @@ export function TaskFormModal({
   const [projectState, setProjectState] = React.useState<ProjectState>("active");
   const [reviewDate, setReviewDate] = React.useState("");
   const [waitingOn, setWaitingOn] = React.useState("");
+  const [goalId, setGoalId] = React.useState<string>("none");
   const [error, setError] = React.useState<{ field: "title" | "category" | "deadline"; message: string } | null>(null);
 
   React.useEffect(() => {
@@ -82,7 +92,7 @@ export function TaskFormModal({
     setConfirmingDelete(false);
     setTitle(task?.title ?? "");
     setNotes(task?.notes ?? "");
-    setCategory(task?.category ?? null);
+    setCategory(task?.category ?? defaultCategory ?? null);
     setUrgent(task?.urgent ?? false);
     setImportant(task?.important ?? false);
     setDeadline(task?.deadline ?? "");
@@ -93,7 +103,8 @@ export function TaskFormModal({
     setProjectState((task?.projectState as ProjectState) ?? "active");
     setReviewDate(task?.reviewDate ?? "");
     setWaitingOn(task?.waitingOn ?? "");
-  }, [open, task]);
+    setGoalId(task?.goalId ?? defaultGoalId ?? "none");
+  }, [open, task, defaultGoalId, defaultCategory]);
 
   const quad = quadrantOf(urgent, important);
 
@@ -147,6 +158,7 @@ export function TaskFormModal({
       projectState: showProjectFields ? projectState : undefined,
       reviewDate: showProjectFields ? reviewDate || null : undefined,
       waitingOn: isSubtaskEdit ? waitingOn.trim() || null : undefined,
+      goalId: showProjectFields ? (goalId === "none" ? null : goalId) : undefined,
     };
 
     const seedList = seedSubtasks
@@ -333,6 +345,27 @@ export function TaskFormModal({
               {(projectState === "paused" || projectState === "someday") && (
                 <p className="text-muted-foreground text-xs">Fecha de revisión: cuándo quieres volver a mirar este proyecto.</p>
               )}
+            </div>
+          )}
+
+          {showProjectFields && (
+            <div className="space-y-1.5">
+              <label className="text-muted-foreground text-xs font-semibold">Meta (opcional)</label>
+              <Select value={goalId} onValueChange={(v) => setGoalId(v ?? "none")}>
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue>
+                    {(v: string) => (v === "none" ? "Sin meta" : (goals.find((g) => g.id === v)?.title ?? "Sin meta"))}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin meta</SelectItem>
+                  {goalOptions.map(({ goal, depth }) => (
+                    <SelectItem key={goal.id} value={goal.id}>
+                      <span style={{ paddingLeft: depth * 12 }}>{goal.icon} {goal.title}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 

@@ -5,6 +5,7 @@ import { computeNextDeadline, todayISO } from "./date-utils";
 import type {
   ActiveTimer,
   Category,
+  Goal,
   PomodoroSettings,
   ProjectState,
   Recurrence,
@@ -26,9 +27,25 @@ export interface TaskFormInput {
   projectState?: ProjectState | null;
   reviewDate?: string | null;
   waitingOn?: string | null;
+  goalId?: string | null;
+}
+
+export interface GoalInput {
+  title: string;
+  notes: string;
+  outcome: string;
+  category: string | null;
+  status: Goal["status"];
+  priority: Goal["priority"];
+  startDate: string | null;
+  endDate: string | null;
+  reviewDate: string | null;
+  icon: string;
+  parentId: string | null;
 }
 
 interface StoreState {
+  goals: Goal[];
   categories: Category[];
   tasks: Task[];
   timeLog: TimeLogEntry[];
@@ -63,6 +80,14 @@ interface StoreState {
 
   // Projects
   selectProject: (id: string | null) => void;
+  setProjectGoal: (projectId: string, goalId: string | null) => void;
+
+  // Goals
+  addGoal: (input: GoalInput) => string;
+  updateGoal: (id: string, patch: Partial<GoalInput>) => void;
+  deleteGoal: (id: string) => void;
+  /** Reparent and/or reorder. Places the goal before `beforeId` among the new siblings (end when null). */
+  moveGoal: (id: string, newParentId: string | null, beforeId: string | null) => void;
 
   // Categories
   addCategory: (name: string, color: string) => void;
@@ -113,6 +138,7 @@ export const useTaskStore = create<StoreState>()(
   persist(
     (set, get) => ({
       categories: defaultCategories(),
+      goals: [],
       tasks: [],
       timeLog: [],
       pomodoroSettings: defaultPomodoroSettings(),
@@ -184,6 +210,7 @@ export const useTaskStore = create<StoreState>()(
                   inbox: false,
                   projectState: input.projectState ?? "active",
                   reviewDate: input.reviewDate ?? null,
+                  goalId: input.goalId ?? null,
                 }
               : t
           ),
@@ -241,6 +268,7 @@ export const useTaskStore = create<StoreState>()(
           createdAt: Date.now(),
           projectState: input.projectState ?? "active",
           reviewDate: input.reviewDate ?? null,
+          goalId: input.goalId ?? null,
         };
         const subtasks: Task[] = seedSubtasks.map((title) => ({
           id: uid(),
@@ -287,6 +315,7 @@ export const useTaskStore = create<StoreState>()(
             if (t.type === "project") {
               patch.projectState = input.projectState ?? "active";
               patch.reviewDate = input.reviewDate ?? null;
+              patch.goalId = input.goalId ?? null;
             }
             if (t.type === "subtask") {
               patch.waitingOn = input.waitingOn ?? null;
@@ -347,6 +376,73 @@ export const useTaskStore = create<StoreState>()(
 
       selectProject: (id) => set({ selectedProjectId: id }),
 
+      setProjectGoal: (projectId, goalId) => {
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === projectId && t.type === "project" ? { ...t, goalId } : t)) }));
+      },
+
+      addGoal: (input) => {
+        const id = uid();
+        set((s) => {
+          const siblings = s.goals.filter((g) => g.parentId === input.parentId);
+          const order = siblings.length ? Math.max(...siblings.map((g) => g.order)) + 1 : 0;
+          const goal: Goal = { id, ...input, order, createdAt: Date.now() };
+          return { goals: [...s.goals, goal] };
+        });
+        return id;
+      },
+
+      updateGoal: (id, patch) => {
+        set((s) => ({ goals: s.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)) }));
+      },
+
+      deleteGoal: (id) => {
+        set((s) => {
+          const removed = new Set<string>([id]);
+          let grew = true;
+          while (grew) {
+            grew = false;
+            for (const g of s.goals) {
+              if (g.parentId && removed.has(g.parentId) && !removed.has(g.id)) {
+                removed.add(g.id);
+                grew = true;
+              }
+            }
+          }
+          return {
+            goals: s.goals.filter((g) => !removed.has(g.id)),
+            // Projects are never deleted with a goal — they just become unlinked.
+            tasks: s.tasks.map((t) => (t.goalId && removed.has(t.goalId) ? { ...t, goalId: null } : t)),
+          };
+        });
+      },
+
+      moveGoal: (id, newParentId, beforeId) => {
+        set((s) => {
+          const moving = s.goals.find((g) => g.id === id);
+          if (!moving || id === newParentId || id === beforeId) return {};
+          // Refuse to drop a goal into its own subtree.
+          let cur = newParentId;
+          while (cur) {
+            if (cur === id) return {};
+            cur = s.goals.find((g) => g.id === cur)?.parentId ?? null;
+          }
+          const siblings = s.goals
+            .filter((g) => g.parentId === newParentId && g.id !== id)
+            .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+          const idx = beforeId ? siblings.findIndex((g) => g.id === beforeId) : -1;
+          const at = idx === -1 ? siblings.length : idx;
+          const ordered = [...siblings.slice(0, at), moving, ...siblings.slice(at)];
+          const orderOf = new Map(ordered.map((g, i) => [g.id, i]));
+          return {
+            goals: s.goals.map((g) => {
+              if (g.id === id) return { ...g, parentId: newParentId, order: orderOf.get(id)! };
+              if (orderOf.has(g.id)) return { ...g, order: orderOf.get(g.id)! };
+              return g;
+            }),
+          };
+        });
+      },
+
       addCategory: (name, color) => {
         const trimmed = name.trim();
         if (!trimmed) return;
@@ -359,7 +455,7 @@ export const useTaskStore = create<StoreState>()(
 
       deleteCategory: (id) => {
         const s = get();
-        const inUse = s.tasks.some((t) => t.category === id);
+        const inUse = s.tasks.some((t) => t.category === id) || s.goals.some((g) => g.category === id);
         if (inUse) return false;
         set({ categories: s.categories.filter((c) => c.id !== id) });
         return true;
@@ -377,6 +473,7 @@ export const useTaskStore = create<StoreState>()(
         set({
           categories: d.categories ?? defaultCategories(),
           tasks: d.tasks ?? [],
+          goals: Array.isArray(d.goals) ? d.goals : [],
           timeLog: d.timeLog ?? [],
           pomodoroSettings: d.pomodoroSettings ?? defaultPomodoroSettings(),
           activeTimer,
@@ -548,6 +645,7 @@ export const useTaskStore = create<StoreState>()(
       partialize: (s) => ({
         categories: s.categories,
         tasks: s.tasks,
+        goals: s.goals,
         timeLog: s.timeLog,
         pomodoroSettings: s.pomodoroSettings,
         activeTimer: s.activeTimer,
