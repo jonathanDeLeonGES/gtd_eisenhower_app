@@ -277,7 +277,7 @@ export function BoardView() {
       urgent: false,
       important: false,
       deadline: null,
-      weekday: null,
+      plannedDate: null,
     });
     setQuickSubtask("");
   }

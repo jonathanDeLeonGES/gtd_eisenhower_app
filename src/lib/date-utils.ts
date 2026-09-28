@@ -34,6 +34,63 @@ export function mondayOf(d: Date): Date {
   return m;
 }
 
+export function addDaysISO(iso: string, days: number): string {
+  const d = isoToLocalDate(iso);
+  d.setDate(d.getDate() + days);
+  return dateToISO(d);
+}
+
+/** Monday (ISO) of the week containing the given ISO date. */
+export function weekStartISO(iso: string): string {
+  return dateToISO(mondayOf(isoToLocalDate(iso)));
+}
+
+/** The 7 ISO dates (Mon..Sun) of the week starting at `startISO`. */
+export function weekDaysISO(startISO: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => addDaysISO(startISO, i));
+}
+
+/** Weeks (arrays of 7 ISO dates, Mon..Sun) covering the month that contains `iso`. */
+export function monthGridISO(iso: string): string[][] {
+  const d = isoToLocalDate(iso);
+  const first = new Date(d.getFullYear(), d.getMonth(), 1);
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  const weeks: string[][] = [];
+  let cur = dateToISO(mondayOf(first));
+  const end = dateToISO(last);
+  while (cur <= end) {
+    weeks.push(weekDaysISO(cur));
+    cur = addDaysISO(cur, 7);
+  }
+  return weeks;
+}
+
+export function addMonthsISO(iso: string, months: number): string {
+  const d = isoToLocalDate(iso);
+  // Clamp to day 1 so e.g. Jan 31 + 1 month doesn't skip February.
+  return dateToISO(new Date(d.getFullYear(), d.getMonth() + months, 1));
+}
+
+/** "septiembre 2026" */
+export function monthLabel(iso: string): string {
+  return isoToLocalDate(iso).toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+}
+
+/** "21 – 27 sep 2026" */
+export function weekRangeLabel(startISO: string): string {
+  const a = isoToLocalDate(startISO);
+  const b = isoToLocalDate(addDaysISO(startISO, 6));
+  const sameMonth = a.getMonth() === b.getMonth();
+  const left = a.toLocaleDateString("es-ES", sameMonth ? { day: "numeric" } : { day: "numeric", month: "short" });
+  const right = b.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+  return `${left} – ${right}`;
+}
+
+/** "viernes, 25 de septiembre de 2026" */
+export function dayLongLabel(iso: string): string {
+  return isoToLocalDate(iso).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
 export type DeadlineStatus = "overdue" | "today" | "soon" | "normal" | null;
 
 export function deadlineStatus(iso: string | null, isDone: boolean): DeadlineStatus {

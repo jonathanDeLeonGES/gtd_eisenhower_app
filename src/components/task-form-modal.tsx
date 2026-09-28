@@ -20,9 +20,9 @@ import {
 } from "@/components/ui/select";
 import { useTaskStore, type TaskFormInput } from "@/lib/store";
 import { quadrantOf, QUAD_STYLES } from "@/lib/quadrant";
-import { recurrenceLabel } from "@/lib/date-utils";
+import { addDaysISO, recurrenceLabel, todayISO } from "@/lib/date-utils";
 import { flattenGoals } from "@/lib/goals";
-import { DAY_NAMES, PROJECT_STATE_LABELS, PROJECT_STATE_ORDER, type ProjectState, type RecurrenceFreq, type Task } from "@/lib/types";
+import { PROJECT_STATE_LABELS, PROJECT_STATE_ORDER, type ProjectState, type RecurrenceFreq, type Task } from "@/lib/types";
 
 export type TaskFormMode = "process-simple" | "process-project" | "new-simple" | "new-project" | "new-subtask" | "edit";
 
@@ -35,6 +35,7 @@ export function TaskFormModal({
   onSaved,
   defaultGoalId,
   defaultCategory,
+  defaultPlannedDate,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -47,6 +48,8 @@ export function TaskFormModal({
   defaultGoalId?: string | null;
   /** New projects: pre-select this category. */
   defaultCategory?: string | null;
+  /** New tasks: pre-plan for this date (ISO). */
+  defaultPlannedDate?: string | null;
 }) {
   const categories = useTaskStore((s) => s.categories);
   const goals = useTaskStore((s) => s.goals);
@@ -76,7 +79,7 @@ export function TaskFormModal({
   const [urgent, setUrgent] = React.useState(false);
   const [important, setImportant] = React.useState(false);
   const [deadline, setDeadline] = React.useState("");
-  const [weekday, setWeekday] = React.useState<string>("none");
+  const [plannedDate, setPlannedDate] = React.useState("");
   const [seedSubtasks, setSeedSubtasks] = React.useState("");
   const [recurFreq, setRecurFreq] = React.useState<string>("none");
   const [recurInterval, setRecurInterval] = React.useState(1);
@@ -96,7 +99,7 @@ export function TaskFormModal({
     setUrgent(task?.urgent ?? false);
     setImportant(task?.important ?? false);
     setDeadline(task?.deadline ?? "");
-    setWeekday(task?.weekday != null ? String(task.weekday) : "none");
+    setPlannedDate(task?.plannedDate ?? defaultPlannedDate ?? "");
     setSeedSubtasks("");
     setRecurFreq(task?.recurrence?.freq ?? "none");
     setRecurInterval(task?.recurrence?.interval ?? 1);
@@ -104,7 +107,7 @@ export function TaskFormModal({
     setReviewDate(task?.reviewDate ?? "");
     setWaitingOn(task?.waitingOn ?? "");
     setGoalId(task?.goalId ?? defaultGoalId ?? "none");
-  }, [open, task, defaultGoalId, defaultCategory]);
+  }, [open, task, defaultGoalId, defaultCategory, defaultPlannedDate]);
 
   const quad = quadrantOf(urgent, important);
 
@@ -140,7 +143,6 @@ export function TaskFormModal({
       setError({ field: "deadline", message: "Las tareas simples requieren fecha límite." });
       return;
     }
-    const weekdayVal = weekday === "none" ? null : Number(weekday);
     const recurrence =
       isSimple && recurFreq !== "none"
         ? { freq: recurFreq as RecurrenceFreq, interval: Math.max(1, recurInterval || 1) }
@@ -153,7 +155,7 @@ export function TaskFormModal({
       urgent,
       important,
       deadline: deadlineVal,
-      weekday: weekdayVal,
+      plannedDate: !showProjectFields && plannedDate ? plannedDate : null,
       recurrence,
       projectState: showProjectFields ? projectState : undefined,
       reviewDate: showProjectFields ? reviewDate || null : undefined,
@@ -205,7 +207,7 @@ export function TaskFormModal({
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Detalles adicionales…" className="rounded-xl" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div className="space-y-1.5">
               <label className="text-muted-foreground text-xs font-semibold">
                 Categoría{categoryRequired && <span className="text-destructive"> *</span>}
@@ -241,21 +243,44 @@ export function TaskFormModal({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-muted-foreground text-xs font-semibold">Día de la semana</label>
-              <Select value={weekday} onValueChange={(v) => setWeekday(v ?? "none")}>
-                <SelectTrigger className="w-full rounded-xl">
-                  <SelectValue>{(v: string) => (v === "none" ? "Sin día asignado" : DAY_NAMES[Number(v)])}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin día asignado</SelectItem>
-                  {DAY_NAMES.map((d, i) => (
-                    <SelectItem key={d} value={String(i)}>{d}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
+
+          {!showProjectFields && (
+            <div className="space-y-1.5">
+              <label className="text-muted-foreground text-xs font-semibold">Fecha planificada (opcional)</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="date"
+                  value={plannedDate}
+                  onChange={(e) => setPlannedDate(e.target.value)}
+                  className="w-auto rounded-xl"
+                />
+                {[
+                  ["Hoy", todayISO()],
+                  ["Mañana", addDaysISO(todayISO(), 1)],
+                ].map(([label, iso]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setPlannedDate(iso)}
+                    className="bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+                {plannedDate && (
+                  <button
+                    type="button"
+                    onClick={() => setPlannedDate("")}
+                    className="text-muted-foreground hover:text-foreground rounded-full px-2 py-1 text-[11px] font-semibold"
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+              <p className="text-muted-foreground text-xs">El día en que piensas hacerla; aparece en el calendario de Planificación. No es la fecha límite.</p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="text-muted-foreground text-xs font-semibold">Prioridad Eisenhower</label>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
+import { cn } from "cn";
 import { TaskCard, type TaskCardProps } from "@/components/task-card";
 
 /**
@@ -19,7 +20,7 @@ export function DraggableTaskCard(props: TaskCardProps) {
       ref={setNodeRef}
       dragging={isDragging}
       style={{ touchAction: "none" }}
-      className="cursor-grab active:cursor-grabbing"
+      className={cn("cursor-grab active:cursor-grabbing", props.className)}
       {...attributes}
       {...listeners}
     />

@@ -28,6 +28,8 @@ export interface Goal {
   createdAt: number;
 }
 
+export type PlannerView = "month" | "week" | "day";
+
 export type RecurrenceFreq = "daily" | "weekly" | "monthly";
 
 export interface Recurrence {
@@ -51,7 +53,10 @@ export interface Task {
   urgent: boolean;
   important: boolean;
   deadline: string | null; // ISO date yyyy-mm-dd
-  weekday: number | null; // 0=Lunes .. 6=Domingo
+  /** Day you plan to do it (ISO yyyy-mm-dd). Distinct from `deadline`, which is when it's due. */
+  plannedDate: string | null;
+  /** @deprecated v1–v3 day-of-week slot (0=Lunes). Only read once, to migrate into `plannedDate`. */
+  weekday?: number | null;
   status: TaskStatus;
   inbox: boolean;
   timeSpent: number; // accumulated seconds

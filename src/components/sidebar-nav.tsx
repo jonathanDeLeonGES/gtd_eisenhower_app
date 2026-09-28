@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 const NAV_ITEMS = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
-  { href: "/semana", label: "Planificación semanal", icon: CalendarDays },
+  { href: "/planificacion", label: "Planificación", icon: CalendarDays },
   { href: "/metas", label: "Metas", icon: Target },
   { href: "/proyectos", label: "Proyectos", icon: KanbanSquare },
   { href: "/timers", label: "Timers", icon: Timer },

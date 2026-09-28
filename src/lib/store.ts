@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { uid } from "./id";
-import { computeNextDeadline, todayISO } from "./date-utils";
+import { addDaysISO, computeNextDeadline, todayISO, weekStartISO } from "./date-utils";
 import type {
   ActiveTimer,
   Category,
   Goal,
+  PlannerView,
   PomodoroSettings,
   ProjectState,
   Recurrence,
@@ -22,7 +23,7 @@ export interface TaskFormInput {
   urgent: boolean;
   important: boolean;
   deadline: string | null;
-  weekday: number | null;
+  plannedDate: string | null;
   recurrence?: Recurrence | null;
   projectState?: ProjectState | null;
   reviewDate?: string | null;
@@ -55,6 +56,8 @@ interface StoreState {
   hasHydrated: boolean;
   sidebarCollapsed: boolean;
   weekGroupByProject: boolean;
+  plannerView: PlannerView;
+  plannerShowDone: boolean;
 
   setHasHydrated: (v: boolean) => void;
   toggleSidebar: () => void;
@@ -76,7 +79,9 @@ interface StoreState {
   toggleSimpleDone: (id: string, done: boolean) => void;
   cycleSubtaskStatus: (id: string) => void;
   setSubtaskStatus: (id: string, status: TaskStatus) => void;
-  setTaskWeekday: (id: string, weekday: number | null) => void;
+  setTaskPlannedDate: (id: string, plannedDate: string | null) => void;
+  setPlannerView: (v: PlannerView) => void;
+  togglePlannerShowDone: () => void;
 
   // Projects
   selectProject: (id: string | null) => void;
@@ -122,6 +127,20 @@ function defaultPomodoroSettings(): PomodoroSettings {
   return { work: 25, shortBreak: 5, longBreak: 15, cycles: 4 };
 }
 
+/**
+ * v1–v3 planned a task by day-of-week only (`weekday`, 0=Lunes). The planner is now a real calendar, so each
+ * such task gets the date of that weekday in the current week. Days already passed land in "Por replanificar".
+ * Idempotent: tasks that already carry `plannedDate` (even null) are left alone.
+ */
+export function migrateTasks(tasks: Task[]): Task[] {
+  const monday = weekStartISO(todayISO());
+  return tasks.map((t) => {
+    if (t.plannedDate !== undefined) return t;
+    const { weekday, ...rest } = t;
+    return { ...rest, plannedDate: typeof weekday === "number" ? addDaysISO(monday, weekday) : null } as Task;
+  });
+}
+
 function baseTaskFields(input: TaskFormInput) {
   return {
     title: input.title,
@@ -130,7 +149,7 @@ function baseTaskFields(input: TaskFormInput) {
     urgent: input.urgent,
     important: input.important,
     deadline: input.deadline,
-    weekday: input.weekday,
+    plannedDate: input.plannedDate,
   };
 }
 
@@ -147,6 +166,8 @@ export const useTaskStore = create<StoreState>()(
       hasHydrated: false,
       sidebarCollapsed: false,
       weekGroupByProject: false,
+      plannerView: "month",
+      plannerShowDone: false,
 
       setHasHydrated: (v) => set({ hasHydrated: v }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -165,7 +186,7 @@ export const useTaskStore = create<StoreState>()(
           urgent: false,
           important: false,
           deadline: null,
-          weekday: null,
+          plannedDate: null,
           status: "todo",
           inbox: true,
           timeSpent: 0,
@@ -227,7 +248,7 @@ export const useTaskStore = create<StoreState>()(
             urgent: false,
             important: false,
             deadline: null,
-            weekday: null,
+            plannedDate: null,
             status: "todo",
             inbox: false,
             timeSpent: 0,
@@ -280,7 +301,7 @@ export const useTaskStore = create<StoreState>()(
           urgent: false,
           important: false,
           deadline: null,
-          weekday: null,
+          plannedDate: null,
           status: "todo",
           inbox: false,
           timeSpent: 0,
@@ -343,7 +364,7 @@ export const useTaskStore = create<StoreState>()(
             urgent: t.urgent,
             important: t.important,
             deadline: computeNextDeadline(t.deadline, t.recurrence.freq, t.recurrence.interval),
-            weekday: t.weekday,
+            plannedDate: computeNextDeadline(t.deadline, t.recurrence.freq, t.recurrence.interval),
             status: "todo",
             inbox: false,
             timeSpent: 0,
@@ -370,9 +391,12 @@ export const useTaskStore = create<StoreState>()(
         set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, status } : t)) }));
       },
 
-      setTaskWeekday: (id, weekday) => {
-        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, weekday } : t)) }));
+      setTaskPlannedDate: (id, plannedDate) => {
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, plannedDate } : t)) }));
       },
+
+      setPlannerView: (v) => set({ plannerView: v }),
+      togglePlannerShowDone: () => set((s) => ({ plannerShowDone: !s.plannerShowDone })),
 
       selectProject: (id) => set({ selectedProjectId: id }),
 
@@ -472,7 +496,7 @@ export const useTaskStore = create<StoreState>()(
         const activeTimer = importedTimer && importedTimer.running ? { ...importedTimer, startTimestamp: Date.now() } : importedTimer;
         set({
           categories: d.categories ?? defaultCategories(),
-          tasks: d.tasks ?? [],
+          tasks: migrateTasks(d.tasks ?? []),
           goals: Array.isArray(d.goals) ? d.goals : [],
           timeLog: d.timeLog ?? [],
           pomodoroSettings: d.pomodoroSettings ?? defaultPomodoroSettings(),
@@ -652,7 +676,14 @@ export const useTaskStore = create<StoreState>()(
         selectedProjectId: s.selectedProjectId,
         sidebarCollapsed: s.sidebarCollapsed,
         weekGroupByProject: s.weekGroupByProject,
+        plannerView: s.plannerView,
+        plannerShowDone: s.plannerShowDone,
       }),
+      // Persisted data from earlier versions still has `weekday` slots: convert them to real dates on load.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<StoreState>;
+        return { ...current, ...p, tasks: migrateTasks(p.tasks ?? current.tasks) };
+      },
     }
   )
 );
