@@ -51,6 +51,9 @@ export function unscheduledTasks(tasks: Task[], today: string): Task[] {
   const overdue = new Set(overdueTasks(tasks, today).map((t) => t.id));
   return plannableTasks(tasks)
     .filter((t) => !t.plannedDate && t.status !== "done" && !overdue.has(t.id))
+    // Delegated tasks with a follow-up date are already being tracked (project board, overdue banner
+    // once it passes) — showing them here too would just be noise. Delegated with no date still needs one.
+    .filter((t) => !(t.status === "delegated" && t.deadline))
     .sort(sortByPriority);
 }
 

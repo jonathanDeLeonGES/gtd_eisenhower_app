@@ -313,7 +313,7 @@ function OverdueBanner({ tasks, allTasks, onEdit, onOpenProject }: {
 }) {
   const setTaskPlannedDate = useTaskStore((s) => s.setTaskPlannedDate);
   const toggleSimpleDone = useTaskStore((s) => s.toggleSimpleDone);
-  const setSubtaskStatus = useTaskStore((s) => s.setSubtaskStatus);
+  const setTaskStatus = useTaskStore((s) => s.setTaskStatus);
   const [open, setOpen] = React.useState(false);
   const today = todayISO();
   const tomorrow = addDaysISO(today, 1);
@@ -322,7 +322,7 @@ function OverdueBanner({ tasks, allTasks, onEdit, onOpenProject }: {
 
   function markDone(t: Task) {
     if (t.type === "simple") toggleSimpleDone(t.id, true);
-    else setSubtaskStatus(t.id, "done");
+    else setTaskStatus(t.id, "done");
   }
 
   return (

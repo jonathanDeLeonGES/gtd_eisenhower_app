@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+import { ArrowUpRight, FolderKanban } from "lucide-react";
 import { cn } from "cn";
 import {
   Dialog,
@@ -22,7 +24,16 @@ import { useTaskStore, type TaskFormInput } from "@/lib/store";
 import { quadrantOf, QUAD_STYLES } from "@/lib/quadrant";
 import { addDaysISO, recurrenceLabel, todayISO } from "@/lib/date-utils";
 import { flattenGoals } from "@/lib/goals";
-import { PROJECT_STATE_LABELS, PROJECT_STATE_ORDER, type ProjectState, type RecurrenceFreq, type Task } from "@/lib/types";
+import {
+  PROJECT_STATE_LABELS,
+  PROJECT_STATE_ORDER,
+  SUBTASK_STATUS_CYCLE,
+  SUBTASK_STATUS_LABELS,
+  type ProjectState,
+  type RecurrenceFreq,
+  type Task,
+  type TaskStatus,
+} from "@/lib/types";
 
 export type TaskFormMode = "process-simple" | "process-project" | "new-simple" | "new-project" | "new-subtask" | "edit";
 
@@ -51,8 +62,10 @@ export function TaskFormModal({
   /** New tasks: pre-plan for this date (ISO). */
   defaultPlannedDate?: string | null;
 }) {
+  const router = useRouter();
   const categories = useTaskStore((s) => s.categories);
   const goals = useTaskStore((s) => s.goals);
+  const tasks = useTaskStore((s) => s.tasks);
   const goalOptions = React.useMemo(() => flattenGoals(goals), [goals]);
   const processTaskAsSimple = useTaskStore((s) => s.processTaskAsSimple);
   const processTaskAsProject = useTaskStore((s) => s.processTaskAsProject);
@@ -60,7 +73,9 @@ export function TaskFormModal({
   const createProject = useTaskStore((s) => s.createProject);
   const createSubtask = useTaskStore((s) => s.createSubtask);
   const updateTask = useTaskStore((s) => s.updateTask);
+  const setTaskStatus = useTaskStore((s) => s.setTaskStatus);
   const deleteTask = useTaskStore((s) => s.deleteTask);
+  const selectProject = useTaskStore((s) => s.selectProject);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
 
   const isProjectMode = mode.includes("project");
@@ -72,6 +87,9 @@ export function TaskFormModal({
   const categoryRequired = mode === "new-project" || mode === "process-project";
   // Projects are deleted from the board (with their own confirmation); tasks are deleted here.
   const canDelete = mode === "edit" && !!task && (task.type === "simple" || task.type === "subtask");
+  // Status is editable directly for simple tasks and subtasks — projects use their own "Estado del proyecto".
+  const canEditStatus = canDelete;
+  const parentProject = isSubtaskEdit && task?.parentId ? tasks.find((t) => t.id === task.parentId) : null;
 
   const [title, setTitle] = React.useState("");
   const [notes, setNotes] = React.useState("");
@@ -87,6 +105,7 @@ export function TaskFormModal({
   const [reviewDate, setReviewDate] = React.useState("");
   const [waitingOn, setWaitingOn] = React.useState("");
   const [goalId, setGoalId] = React.useState<string>("none");
+  const [status, setStatus] = React.useState<TaskStatus>("todo");
   const [error, setError] = React.useState<{ field: "title" | "category" | "deadline"; message: string } | null>(null);
 
   React.useEffect(() => {
@@ -107,6 +126,7 @@ export function TaskFormModal({
     setReviewDate(task?.reviewDate ?? "");
     setWaitingOn(task?.waitingOn ?? "");
     setGoalId(task?.goalId ?? defaultGoalId ?? "none");
+    setStatus(task?.status ?? "todo");
   }, [open, task, defaultGoalId, defaultCategory, defaultPlannedDate]);
 
   const quad = quadrantOf(urgent, important);
@@ -159,7 +179,7 @@ export function TaskFormModal({
       recurrence,
       projectState: showProjectFields ? projectState : undefined,
       reviewDate: showProjectFields ? reviewDate || null : undefined,
-      waitingOn: isSubtaskEdit ? waitingOn.trim() || null : undefined,
+      waitingOn: isSubtaskEdit && status === "delegated" ? waitingOn.trim() || null : undefined,
       goalId: showProjectFields ? (goalId === "none" ? null : goalId) : undefined,
     };
 
@@ -174,7 +194,10 @@ export function TaskFormModal({
     else if (mode === "new-simple") createSimpleTask(input);
     else if (mode === "new-project") createdId = createProject(input, seedList);
     else if (mode === "new-subtask" && parentId) createSubtask(parentId, input);
-    else if (mode === "edit" && task) updateTask(task.id, input, isSimple);
+    else if (mode === "edit" && task) {
+      updateTask(task.id, input, isSimple);
+      if (canEditStatus && status !== task.status) setTaskStatus(task.id, status);
+    }
 
     onSaved?.(createdId);
     onOpenChange(false);
@@ -185,6 +208,22 @@ export function TaskFormModal({
       <DialogContent className="glass shadow-soft max-h-[85vh] overflow-y-auto rounded-3xl sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{heading}</DialogTitle>
+          {parentProject && (
+            <button
+              type="button"
+              onClick={() => {
+                selectProject(parentProject.id);
+                router.push("/proyectos");
+                onOpenChange(false);
+              }}
+              className="text-primary hover:underline -mt-1 flex w-fit items-center gap-1 text-xs font-semibold"
+              title="Ir al proyecto para ver o agregar más tareas"
+            >
+              <FolderKanban className="size-3.5 shrink-0" />
+              Ir a «{parentProject.title}»
+              <ArrowUpRight className="size-3.5 shrink-0" />
+            </button>
+          )}
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
@@ -244,6 +283,22 @@ export function TaskFormModal({
               </Select>
             </div>
           </div>
+
+          {canEditStatus && (
+            <div className="space-y-1.5">
+              <label className="text-muted-foreground text-xs font-semibold">Estado</label>
+              <Select value={status} onValueChange={(v) => setStatus((v as TaskStatus) ?? "todo")}>
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue>{(v: string) => SUBTASK_STATUS_LABELS[v as TaskStatus] ?? "Por hacer"}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {SUBTASK_STATUS_CYCLE.map((s) => (
+                    <SelectItem key={s} value={s}>{SUBTASK_STATUS_LABELS[s]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {!showProjectFields && (
             <div className="space-y-1.5">
@@ -313,7 +368,7 @@ export function TaskFormModal({
 
           <div className="space-y-1.5">
             <label className="text-muted-foreground text-xs font-semibold">
-              {isSubtaskEdit && task?.status === "delegated" ? "Fecha de seguimiento" : "Fecha límite"}{" "}
+              {isSubtaskEdit && status === "delegated" ? "Fecha de seguimiento" : "Fecha límite"}{" "}
               {deadlineRequired ? "(obligatoria)" : "(opcional)"}
             </label>
             <Input
@@ -328,7 +383,7 @@ export function TaskFormModal({
             />
           </div>
 
-          {isSubtaskEdit && task?.status === "delegated" && (
+          {isSubtaskEdit && status === "delegated" && (
             <div className="bg-primary/5 border-primary/20 space-y-1.5 rounded-xl border p-3">
               <label className="text-muted-foreground text-xs font-semibold">¿A quién esperas? (opcional)</label>
               <Input

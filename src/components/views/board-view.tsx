@@ -175,7 +175,7 @@ export function BoardView() {
   const categories = useTaskStore((s) => s.categories);
   const selectedProjectId = useTaskStore((s) => s.selectedProjectId);
   const selectProject = useTaskStore((s) => s.selectProject);
-  const setSubtaskStatus = useTaskStore((s) => s.setSubtaskStatus);
+  const setTaskStatus = useTaskStore((s) => s.setTaskStatus);
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const createSubtask = useTaskStore((s) => s.createSubtask);
 
@@ -264,7 +264,7 @@ export function BoardView() {
     if (!over || !project) return;
     const task = tasks.find((t) => t.id === active.id);
     if (!task || task.parentId !== project.id) return;
-    setSubtaskStatus(String(active.id), over.id as TaskStatus);
+    setTaskStatus(String(active.id), over.id as TaskStatus);
   }
 
   function handleQuickAdd() {

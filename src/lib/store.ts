@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { uid } from "./id";
 import { addDaysISO, computeNextDeadline, todayISO, weekStartISO } from "./date-utils";
+import { SUBTASK_STATUS_CYCLE } from "./types";
 import type {
   ActiveTimer,
   Category,
@@ -78,7 +79,7 @@ interface StoreState {
   // Status changes
   toggleSimpleDone: (id: string, done: boolean) => void;
   cycleSubtaskStatus: (id: string) => void;
-  setSubtaskStatus: (id: string, status: TaskStatus) => void;
+  setTaskStatus: (id: string, status: TaskStatus) => void;
   setTaskPlannedDate: (id: string, plannedDate: string | null) => void;
   setPlannerView: (v: PlannerView) => void;
   togglePlannerShowDone: () => void;
@@ -347,13 +348,25 @@ export const useTaskStore = create<StoreState>()(
       },
 
       toggleSimpleDone: (id, done) => {
+        get().setTaskStatus(id, done ? "done" : "todo");
+      },
+
+      cycleSubtaskStatus: (id) => {
+        const t = get().tasks.find((x) => x.id === id);
+        if (!t) return;
+        const idx = SUBTASK_STATUS_CYCLE.indexOf(t.status);
+        get().setTaskStatus(id, SUBTASK_STATUS_CYCLE[(idx + 1) % SUBTASK_STATUS_CYCLE.length]);
+      },
+
+      // Generic status setter — used for the subtask cycle, the simple-task done checkbox, kanban
+      // drag-and-drop, and the "Estado" field in the edit modal. Spawns the next occurrence when a
+      // recurring task is marked done, same as the old simple-task-only toggle used to.
+      setTaskStatus: (id, status) => {
         const s = get();
         const t = s.tasks.find((x) => x.id === id);
         if (!t) return;
-        set({
-          tasks: s.tasks.map((x) => (x.id === id ? { ...x, status: done ? "done" : "todo" } : x)),
-        });
-        if (done && t.recurrence && t.recurrence.freq) {
+        set({ tasks: s.tasks.map((x) => (x.id === id ? { ...x, status } : x)) });
+        if (status === "done" && t.status !== "done" && t.recurrence && t.recurrence.freq) {
           const next: Task = {
             id: uid(),
             type: "simple",
@@ -374,21 +387,6 @@ export const useTaskStore = create<StoreState>()(
           };
           set((s2) => ({ tasks: [...s2.tasks, next] }));
         }
-      },
-
-      cycleSubtaskStatus: (id) => {
-        const cycle: TaskStatus[] = ["todo", "delegated", "progress", "done"];
-        set((s) => ({
-          tasks: s.tasks.map((t) => {
-            if (t.id !== id) return t;
-            const idx = cycle.indexOf(t.status);
-            return { ...t, status: cycle[(idx + 1) % cycle.length] };
-          }),
-        }));
-      },
-
-      setSubtaskStatus: (id, status) => {
-        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, status } : t)) }));
       },
 
       setTaskPlannedDate: (id, plannedDate) => {
