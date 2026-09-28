@@ -30,6 +30,7 @@ export interface TaskFormInput {
   reviewDate?: string | null;
   waitingOn?: string | null;
   goalId?: string | null;
+  dependsOn?: string | null;
 }
 
 export interface GoalInput {
@@ -204,7 +205,10 @@ export const useTaskStore = create<StoreState>()(
           const removedIds = new Set(
             s.tasks.filter((x) => x.id === id || (t.type === "project" && x.parentId === id)).map((x) => x.id)
           );
-          const tasks = s.tasks.filter((x) => !removedIds.has(x.id));
+          const tasks = s.tasks
+            .filter((x) => !removedIds.has(x.id))
+            // Don't leave a dependency pointing at a task that no longer exists.
+            .map((x) => (x.dependsOn && removedIds.has(x.dependsOn) ? { ...x, dependsOn: null } : x));
           const activeTimer = s.activeTimer && removedIds.has(s.activeTimer.taskId) ? null : s.activeTimer;
           const selectedProjectId = s.selectedProjectId === id ? null : s.selectedProjectId;
           return { tasks, activeTimer, selectedProjectId };
@@ -215,7 +219,15 @@ export const useTaskStore = create<StoreState>()(
         set((s) => ({
           tasks: s.tasks.map((t) =>
             t.id === id
-              ? { ...t, ...baseTaskFields(input), type: "simple" as TaskType, inbox: false, status: "todo" as TaskStatus, recurrence: input.recurrence ?? null }
+              ? {
+                  ...t,
+                  ...baseTaskFields(input),
+                  type: "simple" as TaskType,
+                  inbox: false,
+                  status: "todo" as TaskStatus,
+                  recurrence: input.recurrence ?? null,
+                  dependsOn: input.dependsOn ?? null,
+                }
               : t
           ),
         }));
@@ -272,6 +284,7 @@ export const useTaskStore = create<StoreState>()(
           pomodorosCompleted: 0,
           createdAt: Date.now(),
           recurrence: input.recurrence ?? null,
+          dependsOn: input.dependsOn ?? null,
         };
         set((s) => ({ tasks: [...s.tasks, task] }));
       },
@@ -324,6 +337,7 @@ export const useTaskStore = create<StoreState>()(
           timeSpent: 0,
           pomodorosCompleted: 0,
           createdAt: Date.now(),
+          dependsOn: input.dependsOn ?? null,
         };
         set((s) => ({ tasks: [...s.tasks, subtask] }));
       },
@@ -341,6 +355,9 @@ export const useTaskStore = create<StoreState>()(
             }
             if (t.type === "subtask") {
               patch.waitingOn = input.waitingOn ?? null;
+            }
+            if (t.type === "simple" || t.type === "subtask") {
+              patch.dependsOn = input.dependsOn ?? null;
             }
             return { ...t, ...patch };
           }),

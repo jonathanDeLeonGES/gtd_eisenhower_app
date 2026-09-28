@@ -24,6 +24,7 @@ import { useTaskStore, type TaskFormInput } from "@/lib/store";
 import { quadrantOf, QUAD_STYLES } from "@/lib/quadrant";
 import { addDaysISO, recurrenceLabel, todayISO } from "@/lib/date-utils";
 import { flattenGoals } from "@/lib/goals";
+import { dependencyCreatesCycle } from "@/lib/planner";
 import {
   PROJECT_STATE_LABELS,
   PROJECT_STATE_ORDER,
@@ -106,6 +107,7 @@ export function TaskFormModal({
   const [waitingOn, setWaitingOn] = React.useState("");
   const [goalId, setGoalId] = React.useState<string>("none");
   const [status, setStatus] = React.useState<TaskStatus>("todo");
+  const [dependsOn, setDependsOn] = React.useState<string>("none");
   const [error, setError] = React.useState<{ field: "title" | "category" | "deadline"; message: string } | null>(null);
 
   React.useEffect(() => {
@@ -127,7 +129,22 @@ export function TaskFormModal({
     setWaitingOn(task?.waitingOn ?? "");
     setGoalId(task?.goalId ?? defaultGoalId ?? "none");
     setStatus(task?.status ?? "todo");
+    setDependsOn(task?.dependsOn ?? "none");
   }, [open, task, defaultGoalId, defaultCategory, defaultPlannedDate]);
+
+  // Candidates to depend on, kept narrow so the list never balloons: a subtask can only depend on another
+  // subtask of the *same* project, and a simple task only on another simple task (it has no project to
+  // scope to). Excludes whatever would create a dependency cycle; a task's current dependency stays
+  // selectable even if it just got marked done.
+  const dependencyProjectId = mode === "new-subtask" ? parentId : task?.type === "subtask" ? task.parentId : undefined;
+  const dependencyOptions = React.useMemo(() => {
+    return tasks
+      .filter((t) => (dependencyProjectId ? t.type === "subtask" && t.parentId === dependencyProjectId : t.type === "simple"))
+      .filter((t) => !task || t.id !== task.id)
+      .filter((t) => t.status !== "done" || t.id === task?.dependsOn)
+      .filter((t) => !task || !dependencyCreatesCycle(tasks, task.id, t.id))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [tasks, task, dependencyProjectId]);
 
   const quad = quadrantOf(urgent, important);
 
@@ -181,6 +198,7 @@ export function TaskFormModal({
       reviewDate: showProjectFields ? reviewDate || null : undefined,
       waitingOn: isSubtaskEdit && status === "delegated" ? waitingOn.trim() || null : undefined,
       goalId: showProjectFields ? (goalId === "none" ? null : goalId) : undefined,
+      dependsOn: !showProjectFields ? (dependsOn === "none" ? null : dependsOn) : undefined,
     };
 
     const seedList = seedSubtasks
@@ -334,6 +352,28 @@ export function TaskFormModal({
                 )}
               </div>
               <p className="text-muted-foreground text-xs">El día en que piensas hacerla; aparece en el calendario de Planificación. No es la fecha límite.</p>
+            </div>
+          )}
+
+          {!showProjectFields && (
+            <div className="space-y-1.5">
+              <label className="text-muted-foreground text-xs font-semibold">Depende de (opcional)</label>
+              <Select value={dependsOn} onValueChange={(v) => setDependsOn(v ?? "none")}>
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue>
+                    {(v: string) => (v === "none" ? "Ninguna" : (tasks.find((t) => t.id === v)?.title ?? "Ninguna"))}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Ninguna</SelectItem>
+                  {dependencyOptions.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-xs">
+                Mientras esa tarea no esté hecha, esta no aparecerá en «Sin fecha» de Planificación.
+              </p>
             </div>
           )}
 

@@ -47,6 +47,31 @@ export function deadlinesOnDate(tasks: Task[], iso: string): Task[] {
 }
 
 /** Open tasks with no planned date that aren't already in the overdue list. */
+/** The task `task` depends on, if any (a dangling/removed reference resolves to null — it never blocks). */
+export function dependencyOf(tasks: Task[], task: Task): Task | null {
+  if (!task.dependsOn) return null;
+  return tasks.find((t) => t.id === task.dependsOn) ?? null;
+}
+
+/** True while the task it depends on exists and isn't done yet. */
+export function isTaskBlocked(tasks: Task[], task: Task): boolean {
+  const dep = dependencyOf(tasks, task);
+  return !!dep && dep.status !== "done";
+}
+
+/** True if pointing `taskId`'s dependency at `candidateId` would create a dependency cycle. */
+export function dependencyCreatesCycle(tasks: Task[], taskId: string, candidateId: string): boolean {
+  let cur: string | null | undefined = candidateId;
+  const seen = new Set<string>();
+  while (cur) {
+    if (cur === taskId) return true;
+    if (seen.has(cur)) return false; // pre-existing cycle elsewhere in the data — not this edit's problem
+    seen.add(cur);
+    cur = tasks.find((t) => t.id === cur)?.dependsOn ?? null;
+  }
+  return false;
+}
+
 export function unscheduledTasks(tasks: Task[], today: string): Task[] {
   const overdue = new Set(overdueTasks(tasks, today).map((t) => t.id));
   return plannableTasks(tasks)
@@ -54,6 +79,8 @@ export function unscheduledTasks(tasks: Task[], today: string): Task[] {
     // Delegated tasks with a follow-up date are already being tracked (project board, overdue banner
     // once it passes) — showing them here too would just be noise. Delegated with no date still needs one.
     .filter((t) => !(t.status === "delegated" && t.deadline))
+    // Blocked tasks can't be worked on yet — they reappear here once their dependency is done.
+    .filter((t) => !isTaskBlocked(tasks, t))
     .sort(sortByPriority);
 }
 

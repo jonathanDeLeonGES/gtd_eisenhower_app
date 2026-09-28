@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Pencil, X, Clock, Repeat, FolderKanban, ArrowUpRight } from "lucide-react";
+import { Pencil, X, Clock, Repeat, FolderKanban, ArrowUpRight, CalendarDays, Link2 } from "lucide-react";
 import { cn } from "cn";
 import { useTaskStore, categoryById, projectProgress } from "@/lib/store";
+import { dependencyOf, isTaskBlocked } from "@/lib/planner";
 import { quadrantOf, QUAD_STYLES } from "@/lib/quadrant";
-import { deadlineStatus, deadlineLabel, formatDuration, recurrenceLabel } from "@/lib/date-utils";
+import { deadlineStatus, deadlineLabel, formatDateDisplay, formatDuration, recurrenceLabel, todayISO } from "@/lib/date-utils";
 import { SUBTASK_STATUS_LABELS, type Task } from "@/lib/types";
 
 const DEADLINE_STYLES: Record<string, string> = {
@@ -14,6 +15,8 @@ const DEADLINE_STYLES: Record<string, string> = {
   soon: "bg-amber-500/10 text-amber-700 border-amber-500/25 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30",
   normal: "bg-muted text-muted-foreground border-transparent",
 };
+const PLANNED_STYLES = "bg-sky-500/10 text-sky-700 border-sky-500/25 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/30";
+const BLOCKED_STYLES = "bg-amber-500/10 text-amber-700 border-amber-500/25 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30";
 
 function Tag({
   className,
@@ -72,6 +75,9 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps & React.H
     const dStatus = deadlineStatus(task.deadline, isDone);
     const parent = task.type === "subtask" ? tasks.find((t) => t.id === task.parentId) : null;
     const progress = isProject ? projectProgress(tasks, task.id) : null;
+    const plannedLate = !!task.plannedDate && !isDone && task.plannedDate < todayISO();
+    const dependency = dependencyOf(tasks, task);
+    const blocked = isTaskBlocked(tasks, task);
 
     return (
       // Entry animation is a CSS slide only — no opacity keyframe — so a card can never end up invisible if the
@@ -188,8 +194,19 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps & React.H
           {task.type === "subtask" && !isDone && (
             <Tag compact={compact} className="bg-muted text-muted-foreground border-transparent">{SUBTASK_STATUS_LABELS[task.status]}</Tag>
           )}
+          {task.plannedDate && (
+            <Tag compact={compact} className={plannedLate ? DEADLINE_STYLES.overdue : PLANNED_STYLES}>
+              <CalendarDays className="size-3" /> {plannedLate ? "Replanificar" : "Planificada"} · {formatDateDisplay(task.plannedDate)}
+            </Tag>
+          )}
           {task.deadline && (
             <Tag compact={compact} className={DEADLINE_STYLES[dStatus ?? "normal"]}>{deadlineLabel(task.deadline, dStatus)}</Tag>
+          )}
+          {dependency && blocked && (
+            <Tag compact={compact} className={cn(BLOCKED_STYLES, "max-w-[160px]")}>
+              <Link2 className="size-3 shrink-0" />
+              <span className="truncate">Depende de: {dependency.title}</span>
+            </Tag>
           )}
           {parent && !hideParentTag && (
             onOpenParent ? (

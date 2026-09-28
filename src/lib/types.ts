@@ -71,6 +71,8 @@ export interface Task {
   waitingOn?: string | null;
   /** Project only: the goal this project contributes to (optional). */
   goalId?: string | null;
+  /** Simple task or subtask only: id of another task that must be done first (optional). */
+  dependsOn?: string | null;
 }
 
 export interface TimeLogEntry {
